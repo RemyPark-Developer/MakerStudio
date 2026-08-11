@@ -1,0 +1,107 @@
+:root {
+  --bg: #f4faf6;
+  --grid-line: #e2efe7;
+  --panel: #ffffff;
+  --line-strong: #b9d9c6;
+  --sage: #4c9a72;
+  --sage-dark: #35744f;
+  --sage-pale: #e7f3ec;
+  --coral: #ee8b6a;
+  --ink: #1e3a34;
+  --ink-dim: #5c766c;
+  --ink-faint: #8ca79b;
+  --radius: 10px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background-color: var(--bg);
+  background-image: linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 26px 26px;
+  color: var(--ink);
+  font-family: -apple-system, "Noto Sans KR", sans-serif;
+}
+
+a { color: var(--sage-dark); }
+
+.wrap { max-width: 840px; margin: 0 auto; padding: 32px 20px 80px; }
+
+.card {
+  position: relative;
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  padding: 22px 20px 18px;
+  margin: 20px 0;
+}
+
+.tab {
+  position: absolute;
+  top: -11px;
+  left: 14px;
+  background: var(--sage);
+  color: #fff;
+  font-family: monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.5px;
+  padding: 3px 10px 4px;
+  border-radius: 5px 5px 3px 3px;
+}
+
+.tab.coral { background: var(--coral); }
+
+.pill {
+  font-family: monospace;
+  font-size: 11px;
+  color: var(--ink-dim);
+  border: 1px solid var(--line-strong);
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--sage-pale);
+  margin-right: 8px;
+  display: inline-block;
+}
+
+.codebox {
+  background: #152420;
+  color: #dff0e6;
+  border-radius: 8px;
+  padding: 14px;
+  font-family: monospace;
+  font-size: 13px;
+  line-height: 1.7;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.partlist { list-style: none; padding: 0; margin: 0; }
+.partlist li {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--grid-line);
+  font-size: 14px;
+}
+
+.examplelink {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+}
+
+.quiz-opt {
+  display: block;
+  padding: 8px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  margin-bottom: 6px;
+  font-size: 14px;
+}
+
+.sourcebadge {
+  font-family: monospace;
+  font-size: 11px;
+  color: var(--ink-faint);
+  margin-top: 10px;
+}

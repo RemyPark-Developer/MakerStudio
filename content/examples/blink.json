@@ -1,0 +1,29 @@
+{
+  "id": "blink",
+  "icon": "💡",
+  "label": "Blink",
+  "board": "Arduino UNO",
+  "difficulty": 1,
+  "estimatedMinutes": 20,
+  "pin": "D13 (LED_BUILTIN)",
+  "intro": "Arduino의 가장 첫 실습입니다. 디지털 출력(Digital Output)이 무엇인지, 마이크로컨트롤러가 시간을 어떻게 세는지를 눈으로 직접 확인합니다.",
+  "parts": [
+    "Arduino UNO 보드",
+    "브레드보드",
+    "LED (5mm)",
+    "220Ω 저항",
+    "USB 케이블 (Type-B)",
+    "점퍼 와이어 x2"
+  ],
+  "codeFilename": "blink.ino",
+  "code": "void setup() {\n  pinMode(LED_BUILTIN, OUTPUT);\n}\n\nvoid loop() {\n  digitalWrite(LED_BUILTIN, HIGH);\n  delay(1000);\n  digitalWrite(LED_BUILTIN, LOW);\n  delay(1000);\n}",
+  "explain": "pinMode(pin, OUTPUT)는 핀을 출력용으로 설정합니다. digitalWrite(pin, HIGH/LOW)는 5V 또는 0V를 출력합니다. delay(ms)는 지정한 밀리초만큼 멈춥니다. loop() 안의 코드는 무한히 반복됩니다.",
+  "mission": "두 delay(1000) 값을 200으로 바꾸면 어떻게 될까요?",
+  "quiz": {
+    "question": "delay(1000)은 몇 초를 의미할까요?",
+    "options": ["0.5초", "1초", "10초"],
+    "answer": 1,
+    "explain": "delay(1000)은 1000ms = 1초입니다."
+  },
+  "sourceExample": "Arduino IDE 기본 제공 예제 - Basics > Blink (public domain)"
+}

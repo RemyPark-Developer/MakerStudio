@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  validate-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      # 설계서 §6.3 "2단계 자동 검증" — content/examples/*.json 스키마 검사.
+      # 실제 서비스에서는 이 스텝 뒤에 arduino-cli 컴파일 테스트를 추가해서
+      # AI가 생성한 코드가 실제로 컴파일되는지까지 자동으로 확인하는 걸 권장합니다.
+      - name: Validate content (content/examples/*.json)
+        run: npm run validate-content
+
+      - name: Type-check & build
+        run: npm run build
+
+  # content/** 경로만 바뀐 PR(=AI가 생성한 콘텐츠 모듈)에는 이 라벨을 붙여
+  # "사람 검수" 단계로 넘어갈 대상을 쉽게 구분할 수 있습니다.
+  label-content-pr:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/labeler@v5
+        continue-on-error: true
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}

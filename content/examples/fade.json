@@ -1,0 +1,29 @@
+{
+  "id": "fade",
+  "icon": "🌗",
+  "label": "Fade",
+  "board": "Arduino UNO",
+  "difficulty": 2,
+  "estimatedMinutes": 25,
+  "pin": "D9 (PWM ~)",
+  "intro": "이번엔 LED를 켜고 끄는 게 아니라 밝기를 부드럽게 조절합니다. PWM(Pulse Width Modulation) 신호를 처음 만나는 실습이에요.",
+  "parts": [
+    "Arduino UNO 보드",
+    "브레드보드",
+    "LED (5mm)",
+    "220Ω 저항",
+    "USB 케이블 (Type-B)",
+    "점퍼 와이어 x2"
+  ],
+  "codeFilename": "fade.ino",
+  "code": "int brightness = 0;\nint fadeAmount = 5;\n\nvoid setup() {\n  pinMode(9, OUTPUT);\n}\n\nvoid loop() {\n  analogWrite(9, brightness);\n  brightness += fadeAmount;\n  if (brightness <= 0 || brightness >= 255) {\n    fadeAmount = -fadeAmount;\n  }\n  delay(30);\n}",
+  "explain": "analogWrite(pin, value)는 0~255 값으로 밝기를 조절합니다(PWM). brightness가 최소/최대에 닿으면 fadeAmount의 부호를 뒤집어 반대 방향으로 변하게 만듭니다.",
+  "mission": "fadeAmount를 20으로, delay를 10으로 바꾸면 어떻게 달라질까요?",
+  "quiz": {
+    "question": "analogWrite()에 넣을 수 있는 값의 범위는?",
+    "options": ["0~9", "0~255", "0~1023"],
+    "answer": 1,
+    "explain": "analogWrite()는 8비트 PWM 값인 0~255를 사용합니다."
+  },
+  "sourceExample": "Arduino IDE 기본 제공 예제 - Analog > Fade (public domain)"
+}
