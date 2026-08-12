@@ -59,18 +59,25 @@ content/examples/(새 파일).json ─┘
 
 ## 콘텐츠 검증 (§6.3의 "2단계 자동 검증"에 해당)
 
+두 단계로 검증합니다.
+
 ```bash
-npm run validate-content
+npm run validate-content   # JSON 스키마 검사
+npm run validate-arduino   # 진짜 avr-gcc로 컴파일 검증 (Arduino UNO만 지원)
 ```
 
-`content/examples/`의 모든 JSON을 스키마(`lib/schema.ts`)로 검사합니다.
-스키마에 안 맞는 필드가 있으면 어떤 파일의 어떤 필드가 문제인지 콘솔에 출력하고 실패합니다.
-`.github/workflows/ci.yml`이 PR마다 이 스크립트를 자동으로 실행합니다 — AI가 만든 콘텐츠 모듈도
-이 검증을 통과해야만 사람 검수 단계로 넘어갈 수 있습니다.
+`validate-arduino`는 시뮬레이션이 아니라 실제 avr-gcc + Arduino 코어 소스로 컴파일합니다.
+로컬에서 돌리려면 AVR 툴체인이 필요합니다 (Ubuntu/Debian 기준):
 
-> 실제 서비스로 갈 때는 이 스크립트에 arduino-cli(또는 Wokwi API) 호출을 추가해서,
-> 코드가 스키마상 유효할 뿐 아니라 **진짜로 컴파일되는지**까지 확인하는 걸 권장합니다
-> (design doc §6.3 참고).
+```bash
+sudo apt-get install gcc-avr avr-libc binutils-avr arduino-core-avr
+```
+
+`.github/workflows/ci.yml`이 PR마다 이 두 스크립트를 모두 자동으로 실행합니다 — AI가 만든 콘텐츠
+모듈도 스키마 검증과 실제 컴파일을 둘 다 통과해야만 사람 검수 단계로 넘어갈 수 있습니다.
+
+> 현재는 Arduino UNO(atmega328p)만 지원합니다. ESP32/Pico/micro:bit 등 다른 보드가 추가되면
+> `scripts/validate-arduino-code.ts`에 보드별 툴체인 분기를 추가해야 합니다 (design doc §6.5 참고).
 
 ## 폴더 구조
 

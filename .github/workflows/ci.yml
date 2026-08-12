@@ -21,10 +21,16 @@ jobs:
         run: npm ci
 
       # 설계서 §6.3 "2단계 자동 검증" — content/examples/*.json 스키마 검사.
-      # 실제 서비스에서는 이 스텝 뒤에 arduino-cli 컴파일 테스트를 추가해서
-      # AI가 생성한 코드가 실제로 컴파일되는지까지 자동으로 확인하는 걸 권장합니다.
       - name: Validate content (content/examples/*.json)
         run: npm run validate-content
+
+      # §6.3의 실제 구현 — 진짜 avr-gcc + Arduino 코어로 컴파일 검증합니다.
+      # AI가 만든 코드에 존재하지 않는 함수나 잘못된 핀 번호가 있으면 여기서 걸러집니다.
+      - name: Install AVR toolchain
+        run: sudo apt-get update && sudo apt-get install -y gcc-avr avr-libc binutils-avr arduino-core-avr
+
+      - name: Compile-check Arduino code (real avr-gcc)
+        run: npm run validate-arduino
 
       - name: Type-check & build
         run: npm run build

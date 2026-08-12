@@ -1,0 +1,27 @@
+{
+  "id": "ultrasonic",
+  "icon": "📡",
+  "label": "초음파 센서",
+  "board": "Arduino UNO",
+  "difficulty": 2,
+  "estimatedMinutes": 25,
+  "pin": "D9 (Trig) / D10 (Echo)",
+  "intro": "초음파를 쏘고 반사되어 돌아오는 시간을 재서 거리를 계산합니다. 박쥐가 소리로 주변을 인식하는 것과 같은 원리예요. 이 센서는 4WD 장애물회피 스마트카 코스의 2번 모듈이기도 합니다.",
+  "parts": [
+    "Arduino UNO 보드",
+    "브레드보드",
+    "HC-SR04 초음파 센서",
+    "점퍼 와이어 x4"
+  ],
+  "codeFilename": "ultrasonic.ino",
+  "code": "const int trigPin = 9;\nconst int echoPin = 10;\n\nvoid setup() {\n  Serial.begin(9600);\n  pinMode(trigPin, OUTPUT);\n  pinMode(echoPin, INPUT);\n}\n\nvoid loop() {\n  digitalWrite(trigPin, LOW);\n  delayMicroseconds(2);\n  digitalWrite(trigPin, HIGH);\n  delayMicroseconds(10);\n  digitalWrite(trigPin, LOW);\n\n  long duration = pulseIn(echoPin, HIGH);\n  float distanceCm = duration * 0.034 / 2;\n\n  Serial.print(\"distance: \");\n  Serial.print(distanceCm);\n  Serial.println(\" cm\");\n\n  delay(200);\n}",
+  "explain": "trigPin에 10마이크로초짜리 짧은 신호를 보내면 센서가 초음파를 쏩니다. echoPin은 그 초음파가 반사되어 돌아올 때까지 걸린 시간을 HIGH 신호 길이로 알려줍니다. pulseIn()이 그 시간을 마이크로초 단위로 재고, 소리의 속도(초당 약 340m)를 이용해 거리(cm)로 환산합니다. 2로 나누는 이유는 소리가 물체까지 갔다가 돌아오는 왕복 거리이기 때문이에요.",
+  "mission": "물체를 센서에 가까이/멀리 움직이면서 시리얼 모니터의 숫자가 어떻게 변하는지 관찰해보세요. 일정 거리(예: 10cm) 이내로 물체가 들어오면 LED가 켜지도록 코드를 바꿔볼 수 있을까요?",
+  "quiz": {
+    "question": "distanceCm 계산에서 2로 나누는 이유는?",
+    "options": ["센서 오차를 보정하려고", "소리가 물체까지 갔다가 돌아오는 왕복 거리라서", "단위를 mm에서 cm로 바꾸려고"],
+    "answer": 1,
+    "explain": "초음파는 물체에 부딪혀 반사되어 돌아오므로, 잰 시간은 '왕복' 시간입니다. 실제 거리(편도)를 구하려면 2로 나눠야 합니다."
+  },
+  "sourceExample": "표준 HC-SR04 pulseIn() 패턴 (Arduino 커뮤니티 표준 예제) — avr-gcc 실제 컴파일 검증 통과"
+}
