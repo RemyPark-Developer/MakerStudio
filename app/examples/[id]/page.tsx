@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getAllExamples, getExampleById } from "@/lib/content";
 import { QuizBlock } from "./QuizBlock";
+import { AiTutorPanel } from "./AiTutorPanel";
 
 export function generateStaticParams() {
   return getAllExamples().map((ex) => ({ id: ex.id }));
@@ -73,6 +74,11 @@ export default async function ExamplePage({
       <div className="card">
         <div className="tab coral">Z1 · Quiz</div>
         <QuizBlock quiz={ex.quiz} />
+      </div>
+
+      <div className="card">
+        <div className="tab">AI · TUTOR</div>
+        <AiTutorPanel exampleLabel={ex.label} stepName="학습 중" />
       </div>
     </main>
   );

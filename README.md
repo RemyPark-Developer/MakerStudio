@@ -57,6 +57,26 @@ content/examples/(새 파일).json ─┘
 }
 ```
 
+## AI 튜터 (서버 프록시 + 사용량 제한)
+
+이전 버전(목업 HTML 데모)은 브라우저가 Anthropic API를 직접 호출했습니다 — 테스트용으로는 괜찮지만
+API 키가 누구에게나 노출되고, 무료/유료 사용량 구분이 불가능하다는 문제가 있었습니다
+(design doc §5.2, §6 취약점 검토 1번 참고).
+
+지금은 `app/api/tutor/route.ts`가 서버에서만 Anthropic API를 호출하고, `lib/rate-limit.ts`가
+하루 10회(무료 플랜 기준)로 사용량을 제한합니다. 실행하려면:
+
+```bash
+cp .env.local.example .env.local
+# .env.local 파일을 열어 ANTHROPIC_API_KEY=sk-ant-... 채우기
+npm run dev
+```
+
+⚠️ **알려진 한계 (Phase 3 전까지의 임시 구현)**: 지금은 로그인이 없어서 사용자 대신 IP 주소로
+사용량을 구분하고, 카운트는 서버 메모리에만 저장됩니다(재배포하면 초기화, 인스턴스 여러 개면
+따로 카운트). Supabase 로그인이 붙으면 `lib/rate-limit.ts`의 주석을 따라 user_id 기반 +
+DB/Redis 저장으로 교체해야 합니다. 자세한 내용은 `lib/rate-limit.ts` 상단 주석 참고.
+
 ## 콘텐츠 검증 (§6.3의 "2단계 자동 검증"에 해당)
 
 두 단계로 검증합니다.
