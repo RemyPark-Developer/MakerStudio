@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getAllExamples, getExampleById } from "@/lib/content";
+import { QuizBlock } from "./QuizBlock";
 
 export function generateStaticParams() {
   return getAllExamples().map((ex) => ({ id: ex.id }));
@@ -71,15 +72,7 @@ export default async function ExamplePage({
 
       <div className="card">
         <div className="tab coral">Z1 · Quiz</div>
-        <h3>{ex.quiz.question}</h3>
-        {ex.quiz.options.map((opt, i) => (
-          <div className="quiz-opt" key={i}>
-            {opt}
-          </div>
-        ))}
-        <p style={{ color: "var(--ink-dim)", fontSize: 13 }}>
-          정답: {ex.quiz.options[ex.quiz.answer]} — {ex.quiz.explain}
-        </p>
+        <QuizBlock quiz={ex.quiz} />
       </div>
     </main>
   );
