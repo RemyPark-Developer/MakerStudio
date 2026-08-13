@@ -24,6 +24,10 @@ jobs:
       - name: Validate content (content/examples/*.json)
         run: npm run validate-content
 
+      # §9 "품질 보증 원칙" — 자동 테스트 없이는 배포하지 않는다
+      - name: Unit tests
+        run: npm test
+
       # §6.3의 실제 구현 — 진짜 avr-gcc + Arduino 코어로 컴파일 검증합니다.
       # AI가 만든 코드에 존재하지 않는 함수나 잘못된 핀 번호가 있으면 여기서 걸러집니다.
       - name: Install AVR toolchain

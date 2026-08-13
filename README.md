@@ -115,7 +115,17 @@ scripts/
 .github/workflows/ci.yml    빌드 + 콘텐츠 검증 자동화
 ```
 
+## Claude Code로 이어서 개발하기
+
+이 저장소에는 `CLAUDE.md`가 있습니다 — Claude Code가 세션마다 자동으로 읽는 파일로, 절대 원칙(미성년자 결제 차단, Premium 콘텐츠 게이팅 등)과 지금까지 구현된 것을 요약해뒀습니다.
+
+- `docs/` — 설계서·MVP범위·API명세·DB스키마·인증플로우·비기능요구사항·개발순서표 7종 전체
+- `supabase/migrations/0001_init.sql` — DB 스키마 문서를 실제 SQL로 옮긴 것. 로컬 Postgres에 실제로 실행해서 제약조건(역할 체크, 보호자 동의 필수 등)이 의도대로 작동하는지 확인 완료.
+
+새 세션을 시작할 때는 `docs/MakerStudio_Dev_Sequence_v1.0.md`를 열어 아직 안 끝난 가장 앞 단계부터 진행하세요.
+
 ## 다음 단계 (design doc 로드맵 기준)
+
 
 - [ ] Supabase 연동 (로그인, 진도 저장) — §5.2
 - [ ] Wokwi 임베드로 회로 시뮬레이션 교체 — §5.2, §5.3

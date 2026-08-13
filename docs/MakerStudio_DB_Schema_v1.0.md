@@ -1,0 +1,179 @@
+# MakerStudio DB 스키마 (MVP 범위)
+
+**버전**: v1.0 · **작성일**: 2026-08-13
+**짝 파일**: `MakerStudio_Project_Design_v2.4.md` · `MakerStudio_MVP_Scope_v1.2.md` · `MakerStudio_API_Spec_v1.0.md`
+
+## 0. 이 문서의 목적과 범위
+
+`MakerStudio_API_Spec_v1.0.md`의 엔드포인트가 실제로 읽고 쓰는 테이블을 정의합니다. **MVP 범위(Must·Should·Could)에 필요한 테이블만** 포함합니다. PostgreSQL(Supabase) 기준입니다.
+
+## 0.1 Supabase 사용 시 주의 — `auth.users`를 직접 만들지 않는다
+
+Supabase는 이메일·비밀번호·소셜 로그인을 처리하는 `auth.users` 테이블을 **이미 자체적으로 제공**합니다 (§5.2에서 Supabase를 선택한 이유 중 하나). 아래 `profiles` 테이블은 `auth.users`를 **대체하는 게 아니라 확장**하는 테이블입니다 — Supabase 표준 패턴입니다.
+
+```sql
+-- auth.users는 Supabase가 자동 생성/관리 (직접 만들지 않음)
+-- public.profiles가 우리 서비스 고유 필드를 담당
+```
+
+---
+
+## 1. `identity` 도메인
+
+### `profiles`
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| id | uuid, PK | `auth.users.id`와 동일값 (FK) |
+| role | text | `student_teen` \| `student_child` \| `guardian` \| `admin` |
+| nickname | text | 최대 10자 (§10 프로필수정 제약과 동일) |
+| avatar | text | 이모지 코드 또는 아바타 ID |
+| created_at | timestamptz | |
+| deleted_at | timestamptz, nullable | 소프트 삭제 — §4.5 환불 처리와 시점을 맞추기 위해 즉시 하드 삭제하지 않음(법적 보존 의무 데이터와 분리 원칙, §4.5 참고). 실제 익명화/하드삭제 배치는 별도 운영 정책 필요 |
+
+### `guardian_child_links`
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| id | uuid, PK | |
+| guardian_id | uuid, FK → profiles.id | |
+| child_id | uuid, FK → profiles.id | |
+| consent_verified_at | timestamptz | SMS 인증 완료 시각 (§3.2 법적 요건 — 반드시 저장) |
+| consent_method | text | `sms` (MVP는 이 방식만) |
+
+### `password_reset_tokens`
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| id | uuid, PK | |
+| user_id | uuid, FK → profiles.id | |
+| token | text, unique | |
+| expires_at | timestamptz | 발급 후 30분(프로토타입과 동일) |
+| used_at | timestamptz, nullable | |
+
+---
+
+## 2. `billing` 도메인
+
+### `subscriptions`
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| id | uuid, PK | |
+| guardian_id | uuid, FK → profiles.id | 결제 주체 — 반드시 role=guardian만 (§3.2 서버 검증 필수) |
+| child_id | uuid, FK → profiles.id | 혜택을 받는 자녀 계정 |
+| plan | text | `free` \| `premium` (MVP는 이 2개만, 가족/B2B는 Won't) |
+| status | text | `active` \| `canceled` \| `past_due` |
+| current_period_start | timestamptz | |
+| current_period_end | timestamptz | 해지해도 이 시점까지 유지(§4.3) |
+| canceled_at | timestamptz, nullable | |
+
+### `payments`
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| id | uuid, PK | |
+| subscription_id | uuid, FK → subscriptions.id | |
+| amount | integer | 원화, 소수점 없음 |
+| status | text | `success` \| `failed` \| `refunded` |
+| pg_transaction_id | text | 포트원 거래 ID |
+| paid_at | timestamptz | |
+
+**보존 원칙(§4.5)**: `deleted_at`이 찍힌 사용자의 `payments` 레코드는 삭제하지 않고 그대로 둡니다 — 전자상거래법상 거래 기록 보존 의무(예: 5년) 때문입니다. `profiles`가 소프트 삭제되어도 `payments`는 `subscription_id`를 통해 계속 조회 가능해야 합니다.
+
+---
+
+## 3. `content` 도메인
+
+### `examples`
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| id | uuid, PK | |
+| slug | text, unique | `blink`, `fade` 등 (기존 콘텐츠 JSON의 `id`와 동일) |
+| label | jsonb | `{"ko": "...", "en": "..."}` (§6.2 다국어 대비 스키마 그대로) |
+| board | text | `Arduino UNO` 등 |
+| difficulty | smallint | |
+| estimated_minutes | smallint | |
+| pin | text | |
+| intro | jsonb | 다국어 객체 |
+| parts | jsonb | 문자열 배열 |
+| code | text | **Premium 콘텐츠면 §7.2에 따라 미구독자에게 절대 반환하지 않음 — API 레이어에서 필터링** |
+| explain | jsonb | 다국어 객체, code와 동일하게 게이팅 |
+| mission | jsonb | |
+| quiz | jsonb | `{question, options, answer, explain}` |
+| status | text | `draft` \| `pending_review` \| `published` \| `withdrawn` (§6.3) |
+| version | integer | 기본 1, 개정 시 증가(§6.3 "기존 버전은 유지") |
+| source_example | text | 소싱 출처(§6.5) |
+| last_verified_at | timestamptz | §8.2 신뢰 지표 공개용 |
+| is_premium | boolean | Free 콘텐츠 여부 (MVP는 3개 다 Free일 수 있음 — Premium 콘텐츠 추가 시 이 플래그로 게이팅) |
+
+---
+
+## 4. `learning` 도메인
+
+### `progress`
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| id | uuid, PK | |
+| user_id | uuid, FK → profiles.id | |
+| example_id | uuid, FK → examples.id | |
+| step | smallint | |
+| updated_at | timestamptz | |
+| UNIQUE(user_id, example_id) | | 한 사용자-예제 조합은 진도 1개만 |
+
+### `saved_codes`
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| id | uuid, PK | |
+| user_id | uuid, FK → profiles.id | |
+| example_id | uuid, FK → examples.id | |
+| code | text | |
+| saved_at | timestamptz | |
+
+### `wishlist_items` (Could — 협상 결과에 따라 테이블 자체를 안 만들 수 있음)
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| id | uuid, PK | |
+| user_id | uuid, FK → profiles.id | |
+| kit_id | text | 카탈로그 키트 식별자 |
+| created_at | timestamptz | |
+| UNIQUE(user_id, kit_id) | | |
+
+### `tutor_usage`
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| user_id | uuid, FK → profiles.id | |
+| usage_date | date | |
+| count | smallint | |
+| PRIMARY KEY(user_id, usage_date) | | `lib/rate-limit.ts`를 메모리 대신 이 테이블로 전환(§5.2 명시된 전환 지점) |
+
+---
+
+## 5. `notifications` 도메인
+
+### `notifications`
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| id | uuid, PK | |
+| user_id | uuid, FK → profiles.id | |
+| type | text | `payment_failed` 등 (MVP는 결제실패만 Must) |
+| message | text | |
+| action_url | text, nullable | |
+| read_at | timestamptz, nullable | |
+| created_at | timestamptz | |
+
+---
+
+## 6. ERD 요약 (관계만)
+
+```
+auth.users (Supabase 관리) ──1:1── profiles
+profiles ──1:N(guardian)── guardian_child_links ──N:1(child)── profiles
+profiles(guardian) ──1:N── subscriptions ──1:N── payments
+profiles ──1:N── progress ──N:1── examples
+profiles ──1:N── saved_codes ──N:1── examples
+profiles ──1:N── wishlist_items (Could)
+profiles ──1:N── tutor_usage
+profiles ──1:N── notifications
+```
+
+## 7. 이 문서에서 아직 정의하지 않은 것
+
+- 인덱스 설계 (쿼리 패턴이 확정된 후 결정 — 예: `examples.status`, `progress.user_id` 등에 필요할 가능성 높음)
+- Row Level Security(RLS) 정책 — Supabase 사용 시 필수. `profiles.role`별로 어떤 행을 읽고 쓸 수 있는지 규칙 필요(특히 `student_child`가 `billing` 테이블에 접근 못 하도록 하는 규칙이 §3.2 원칙의 DB 레벨 강제)
+- `moderation` 도메인 테이블 — MVP는 비-UI라 Supabase 대시보드에서 `examples.status`를 직접 수정하는 것으로 충분, 별도 테이블 불필요
