@@ -30,6 +30,17 @@ Claude Code가 이 저장소에서 작업할 때 항상 먼저 읽어야 하는 
 - `content/examples/*.json` — Blink/Fade/초음파센서 3개, 전부 실제 avr-gcc 컴파일 검증 통과.
 - `scripts/validate-content.ts`, `scripts/validate-arduino-code.ts` — 콘텐츠 검증 파이프라인, CI에 연결됨.
 - `lib/schema.ts` — 콘텐츠 zod 스키마 (다국어 대비 구조로 확장 예정, `Design.md` §6.2 참고).
+- `lib/identity/childSignup.ts` — 초등학생 보호자 동의 재검증 로직 (절대 원칙 4번의 실제 구현, 단위테스트 6개로 검증됨).
+- `app/api/identity/*` — 로그인·로그아웃·비밀번호 찾기/재설정·프로필(me)·일반가입·초등학생 가입 2단계, 전부 라우트 존재. **단, 실제 Supabase 프로젝트 연결 전이라 Supabase 호출 지점에서는 에러가 남 — 이건 정상.** `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`를 `.env.local`에 채우면 바로 작동하도록 짜여 있음.
+- `lib/supabase/server.ts`, `lib/supabase/auth-context.ts` — Supabase 서버 클라이언트 + 인증 헬퍼.
+- `supabase/migrations/0001_init.sql` — DB 스키마 전체, 로컬 Postgres로 실제 실행 검증 완료(제약조건 포함).
+- `app/page.tsx`(랜딩), `app/login`, `app/signup`, `app/forgot-password` — 프로토타입에서 이식한 실제 화면, 위 API에 실제 연결됨. 콘텐츠 목록은 `app/examples`로 이동함.
+
+## 아직 안 된 것 (2단계 잔여)
+
+- 소셜 로그인(카카오·구글) OAuth 콜백 자체 연동 — Supabase 프로젝트에서 OAuth 프로바이더 설정 필요
+- `guardian_child_links` 실제 연결 로직 (초등학생 가입 완료 시 보호자 계정과 매칭하는 부분, `app/api/identity/signup/child/verify/route.ts`의 TODO 참고)
+- 나머지 화면 이식(카탈로그·결제·학습화면) — Dev_Sequence.md 기준 해당 백엔드 단계가 준비될 때 순서대로
 
 ## 지금 뭘 해야 하는지 모르겠으면
 

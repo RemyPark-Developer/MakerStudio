@@ -9,9 +9,10 @@
     "lint": "next lint",
     "validate-content": "tsx scripts/validate-content.ts",
     "validate-arduino": "tsx scripts/validate-arduino-code.ts",
-    "test": "node --import tsx --test lib/**/*.test.ts"
+    "test": "node --import tsx --test 'lib/**/*.test.ts'"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
     "next": "^15.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
