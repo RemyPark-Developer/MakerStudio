@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { startChildSignup } from "@/lib/identity/childSignup";
+import { sendVerificationSms } from "@/lib/sms/solapi";
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
@@ -21,9 +22,19 @@ export async function POST(req: NextRequest) {
 
   const { verifyToken, smsCode } = startChildSignup(nickname, guardianPhone);
 
-  // TODO(Phase 3 실연동): 실제 SMS 발송 서비스(예: 알리고, NHN Cloud, Twilio)로 교체.
-  // 지금은 개발 편의를 위해 서버 로그로만 남김 — smsCode를 응답 바디에 절대 포함하지 않는다.
-  console.log(`[SMS 발송 예정 — 실제 연동 전] ${guardianPhone} -> 인증코드: ${smsCode}`);
+  // ⚠️ 실제로 문자를 보내고, 실패하면 성공한 척하지 않는다 (2026-08-13 정정).
+  try {
+    await sendVerificationSms(guardianPhone, smsCode);
+  } catch (err) {
+    console.error("SMS 발송 실패:", err);
+    return NextResponse.json(
+      {
+        error: "sms_send_failed",
+        message: "인증번호 발송에 실패했어요. 번호를 확인하거나 잠시 후 다시 시도해주세요.",
+      },
+      { status: 502 } // 502: 우리 서버가 의존하는 외부 서비스(Solapi)가 실패했다는 뜻
+    );
+  }
 
   return NextResponse.json({ verifyToken });
 }
