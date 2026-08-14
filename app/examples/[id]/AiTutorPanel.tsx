@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { authedFetch } from "@/lib/client-auth";
 
 type Line = { role: "user" | "bot" | "sys"; text: string };
 
@@ -24,20 +25,15 @@ export function AiTutorPanel({
     const question = preset ?? input.trim();
     if (!question || busy) return;
 
-    const token = typeof window !== "undefined" ? localStorage.getItem("ms_access_token") : null;
-    if (!token) {
-      setNeedsLogin(true);
-      return;
-    }
-
     setLines((prev) => [...prev, { role: "user", text: question }]);
     setInput("");
     setBusy(true);
 
     try {
-      const res = await fetch("/api/tutor", {
+      // authedFetch가 만료된 토큰이면 자동으로 갱신 후 재시도한다 (2026-08-13 수정).
+      const res = await authedFetch("/api/tutor", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question, exampleLabel, stepName }),
       });
       const data = await res.json();

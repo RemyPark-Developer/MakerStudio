@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { authedFetch } from "@/lib/client-auth";
 
 type ProgressRow = { example_id: string; step: number; updated_at: string };
 type CodeRow = { id: string; example_id: string; code: string; saved_at: string };
@@ -12,22 +13,27 @@ export default function MyPage() {
   const [needsLogin, setNeedsLogin] = useState(false);
 
   useEffect(() => {
-    const token = localStorage.getItem("ms_access_token");
-    if (!token) {
+    if (!localStorage.getItem("ms_access_token")) {
       setNeedsLogin(true);
       return;
     }
-    const headers = { Authorization: `Bearer ${token}` };
 
-    fetch("/api/learning/progress", { headers })
-      .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
+    // authedFetch가 만료된 토큰이면 자동으로 갱신 후 재시도한다 (2026-08-13 수정).
+    authedFetch("/api/learning/progress")
+      .then((res) => {
+        if (res.status === 401) { setNeedsLogin(true); return Promise.reject(401); }
+        return res.ok ? res.json() : Promise.reject(res.status);
+      })
       .then((data) => setProgress(data.progress))
-      .catch(() => setProgress([]));
+      .catch(() => setProgress((p) => p ?? []));
 
-    fetch("/api/learning/code", { headers })
-      .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
+    authedFetch("/api/learning/code")
+      .then((res) => {
+        if (res.status === 401) { setNeedsLogin(true); return Promise.reject(401); }
+        return res.ok ? res.json() : Promise.reject(res.status);
+      })
       .then((data) => setCodes(data.codes))
-      .catch(() => setCodes([]));
+      .catch(() => setCodes((c) => c ?? []));
   }, []);
 
   if (needsLogin) {
