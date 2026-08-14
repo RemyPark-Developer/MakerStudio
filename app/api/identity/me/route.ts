@@ -21,8 +21,10 @@ export const GET = withErrorHandling(async (req: NextRequest) => {
     .eq("id", authData.user.id)
     .maybeSingle();
 
-  // Auth_Flow.md §2.1 — auth.users엔 있지만 profiles가 없으면 "최초 소셜 가입, 온보딩 필요"
-  if (!profile) {
+  // 2026-08-14 변경: 이제 DB 트리거(0003)가 auth.users 생성 즉시 profiles 행을 항상 만들기
+  // 때문에, "행이 있는지"가 아니라 "닉네임이 채워졌는지"로 온보딩 필요 여부를 판단해야 한다.
+  // (트리거 도입 전엔 "행 없음 = 최초 소셜 가입"이었지만, 이제 행은 항상 있고 닉네임만 비어있음)
+  if (!profile || !profile.nickname) {
     return NextResponse.json({ needsNickname: true });
   }
 
@@ -79,9 +81,11 @@ async function getAuthedUserOrNewSocialUser(
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id")
+    .select("nickname")
     .eq("id", data.user.id)
     .maybeSingle();
 
-  return { id: data.user.id, isNew: !profile };
+  // 2026-08-14 변경: 트리거가 행을 항상 만들어두므로, "행 없음"이 아니라 "닉네임 없음"으로
+  // 최초 온보딩 여부를 판단한다 (GET 핸들러와 동일한 기준으로 통일).
+  return { id: data.user.id, isNew: !profile?.nickname };
 }

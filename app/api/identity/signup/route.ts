@@ -35,27 +35,19 @@ export const POST = withErrorHandling(async (req: NextRequest) => {
 
   const supabase = getSupabaseServerClient();
 
+  // 2026-08-14 변경: profiles를 별도로 insert하지 않는다 — auth.users 생성 시
+  // user_metadata를 넘기면 DB 트리거(0003_auto_create_profile.sql)가 원자적으로 처리한다.
+  // (이전엔 이 둘이 별개의 API 호출이라 "계정은 생겼는데 프로필이 없는" 반쪽 계정이 생길 수 있었음)
   const { data: authData, error: authError } = await supabase.auth.admin.createUser({
     email,
     password,
     email_confirm: true, // TODO(Phase 3): 실제 이메일 인증 링크 발송으로 전환, 지금은 즉시 확정
+    user_metadata: { role: "student_teen", nickname }, // §3.3: 소셜/이메일 가입은 만 14세 이상으로 간주
   });
   if (authError || !authData?.user) {
     return NextResponse.json(
       { error: "signup_failed", message: authError?.message ?? "가입에 실패했어요." },
       { status: 400 }
-    );
-  }
-
-  const { error: profileError } = await supabase.from("profiles").insert({
-    id: authData.user.id,
-    role: "student_teen", // §3.3: 소셜/이메일 가입은 만 14세 이상으로 간주
-    nickname,
-  });
-  if (profileError) {
-    return NextResponse.json(
-      { error: "server_error", message: "프로필 생성 중 문제가 발생했어요." },
-      { status: 500 }
     );
   }
 

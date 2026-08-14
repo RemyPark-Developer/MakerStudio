@@ -33,21 +33,16 @@ export async function POST(req: NextRequest) {
   try {
     const supabase = getSupabaseServerClient();
 
-    // 1) auth.users에 계정 생성 (초등학생은 이메일 없이 임시 식별자 사용)
+    // auth.users에 계정 생성 (초등학생은 이메일 없이 임시 식별자 사용).
+    // 2026-08-14 변경: user_metadata를 넘기면 DB 트리거(0003_auto_create_profile.sql)가
+    // profiles를 원자적으로 함께 생성한다 — 별도 insert를 더 이상 하지 않는다.
+    // (예전엔 이 둘이 별개 호출이라 "계정은 생겼는데 프로필이 없는" 반쪽 계정이 실제로 발생했음)
     const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
       email: `child-${crypto.randomUUID()}@placeholder.makerstudio.internal`,
       email_confirm: true,
       user_metadata: { nickname: result.nickname, role: "student_child" },
     });
     if (authError || !authUser?.user) throw authError ?? new Error("auth user creation failed");
-
-    // 2) profiles 생성
-    const { error: profileError } = await supabase.from("profiles").insert({
-      id: authUser.user.id,
-      role: "student_child",
-      nickname: result.nickname,
-    });
-    if (profileError) throw profileError;
 
     // TODO(Phase 3): guardianPhone으로 기존 보호자 계정을 찾거나 새로 만들어
     // guardian_child_links에 consent_verified_at = now()로 연결하는 로직 추가.
