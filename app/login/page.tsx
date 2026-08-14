@@ -1,9 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginPageInner />
+    </Suspense>
+  );
+}
+
+function LoginPageInner() {
+  const searchParams = useSearchParams();
+  const justVerified = searchParams.get("verified") === "1";
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -11,10 +23,11 @@ export default function LoginPage() {
 
   useEffect(() => {
     // 이미 로그인된 상태로 /login에 다시 들어오면, 굳이 또 로그인시키지 않고 마이페이지로 보낸다.
-    if (localStorage.getItem("ms_access_token")) {
+    // 단, 이메일 인증 링크를 막 클릭하고 돌아온 경우(justVerified)는 예외 — 로그인 폼을 보여줘야 한다.
+    if (!justVerified && localStorage.getItem("ms_access_token")) {
       window.location.href = "/mypage";
     }
-  }, []);
+  }, [justVerified]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -48,6 +61,12 @@ export default function LoginPage() {
       <div className="card">
         <div className="tab">로그인</div>
         <h2>다시 오셨네요</h2>
+
+        {justVerified && (
+          <p style={{ background: "var(--sage-pale)", padding: "10px 12px", borderRadius: 8, fontSize: 13, color: "var(--sage-dark)", marginTop: 10 }}>
+            ✅ 이메일 인증이 완료됐어요. 이제 로그인해주세요.
+          </p>
+        )}
 
         {/* TODO: 소셜 로그인(카카오·구글)은 OAuth 프로바이더 등록 후 추가 — Dev_Sequence.md 2단계 잔여 항목 */}
 

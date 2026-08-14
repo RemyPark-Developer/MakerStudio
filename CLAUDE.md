@@ -38,6 +38,7 @@ Claude Code가 이 저장소에서 작업할 때 항상 먼저 읽어야 하는 
 - **⚠️ 절대 규칙 추가 (2026-08-14)**: `auth.users`를 생성하는 코드(회원가입 등)에서 **절대로 `profiles`를 별도 `.insert()`로 만들지 말 것.** `0003_auto_create_profile.sql`의 트리거가 `user_metadata`(role, nickname)를 읽어서 자동으로 만든다. 별도 insert를 추가하면 트리거와 충돌해 중복키 에러가 난다. 새 가입 경로를 만들 때는 `createUser({ user_metadata: { role, nickname } })` 패턴만 쓸 것.
 - `app/page.tsx`(랜딩), `app/login`, `app/signup`, `app/forgot-password` — 프로토타입에서 이식한 실제 화면, 위 API에 실제 연결됨. 콘텐츠 목록은 `app/examples`로 이동함.
 - `lib/sms/solapi.ts` — 실제 SMS 발송(Solapi). **설정 안 되어 있으면 명확히 실패함(성공한 척 안 함) — 이 원칙을 다른 외부 서비스 연동(포트원 등)에도 그대로 적용할 것.**
+- `lib/email/resend.ts` — 실제 이메일 발송(Resend). 회원가입 시 이메일 실소유 확인에 사용. **같은 원칙 — 설정 안 되어 있으면 명확히 실패.**
 - `lib/content/gate.ts` + `app/api/content/examples/[id]/route.ts` — §7.2(Premium 콘텐츠 SSG 금지)의 실제 구현. code/explain/quiz(정답 포함) 전부 게이팅 대상. `app/examples/[id]/page.tsx`는 더 이상 `generateStaticParams`를 쓰지 않음. **새 콘텐츠 관련 페이지를 만들 때 절대 이 패턴(정적 생성)으로 되돌리지 말 것.**
 - `app/api/learning/progress`, `app/api/learning/code`, `app/mypage/page.tsx` — 진도·저장코드 실데이터 연동, 전부 인증 필수.
 - `app/api/tutor/route.ts` — AI 튜터, **로그인 필수**(2026-08-13 결정), `lib/rate-limit-db.ts`(DB 기반, user_id 기준) 사용. 시스템 프롬프트에 예제 범위 밖 질문 거절 규칙 포함.

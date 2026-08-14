@@ -7,16 +7,16 @@ type Branch = "teen" | "child";
 
 export default function SignupPage() {
   const [branch, setBranch] = useState<Branch>("teen");
-  const [done, setDone] = useState(false);
+  const [doneMessage, setDoneMessage] = useState<string | null>(null);
 
   // 가입이 끝나면, "누구신가요?" 선택 화면으로 되돌아가지 않고 완료 화면만 깔끔하게 보여준다.
   // (2026-08-14 수정 — 이전엔 가입 완료 메시지 위에 역할 선택 탭이 계속 남아있어서 혼란스러웠음)
-  if (done) {
+  if (doneMessage) {
     return (
       <main className="authWrap">
         <div className="card center">
           <div className="tab">회원가입</div>
-          <p style={{ fontSize: 15, margin: "16px 0" }}>🎉 가입이 완료됐어요! 이제 로그인해주세요.</p>
+          <p style={{ fontSize: 15, margin: "16px 0" }}>{doneMessage}</p>
           <Link href="/login" className="btn btnCoral fullBtn">로그인하러 가기</Link>
         </div>
       </main>
@@ -48,9 +48,9 @@ export default function SignupPage() {
         </div>
 
         {branch === "teen" ? (
-          <TeenSignupForm onDone={() => setDone(true)} />
+          <TeenSignupForm onDone={() => setDoneMessage("📧 확인 메일을 보냈어요! 메일함에서 링크를 눌러야 로그인할 수 있어요.")} />
         ) : (
-          <ChildSignupForm onDone={() => setDone(true)} />
+          <ChildSignupForm onDone={() => setDoneMessage("🎉 가입이 완료됐어요!")} />
         )}
       </div>
     </main>
