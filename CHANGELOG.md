@@ -2,6 +2,28 @@
 
 이 파일은 `makerstudio-web-scaffold_vX.X.zip`의 버전과 함께 관리됩니다. 문서(design doc 등)와 마찬가지로, 코드를 전달할 때마다 버전을 올리고 여기에 한 줄씩 남깁니다.
 
+## v1.4 — 2026-08-13
+
+**요약**: v1.3에서 알려진 범위 밖으로 남겨뒀던 퀴즈 게이팅 구멍을 닫음. Premium 콘텐츠가 잠겼을 때 `quiz`(정답 포함) 필드도 code/explain과 함께 제거되도록 수정.
+
+- 수정: `lib/content/gate.ts` — 잠긴 응답에서 `quiz` 필드도 함께 제거
+- 수정: `app/examples/[id]/page.tsx` — quiz 데이터가 없을 때 QuizBlock을 렌더링하지 않도록 방어
+- 수정: `lib/content/gate.test.ts` — quiz 제거를 검증하는 어서션 추가
+- 검증: 실제 API 호출로 잠긴 콘텐츠에서 `quiz` 필드가 응답에 없는 것 확인, 테스트 14개 전부 통과, 클린룸 재검증 통과
+
+## v1.3 — 2026-08-13
+
+**요약**: Dev_Sequence.md 3단계(§7.2 콘텐츠 게이팅) 구현. `app/examples/[id]/page.tsx`가 `generateStaticParams`로 정적 생성되던 것을 동적 렌더링으로 전환.
+
+- 신규: `lib/content/gate.ts` — §7.2의 실제 구현. Premium 콘텐츠는 구독 확인 후에만 code/explain 포함, **확인 실패 시 항상 잠금(fail-closed)**
+- 신규: 단위테스트 4개 (`lib/content/gate.test.ts`) — 무료/Premium(비로그인)/Premium(구독확인불가)/미리보기필드 보존 케이스
+- 신규: `app/api/content/examples/[id]/route.ts` — `export const dynamic = "force-dynamic"` 명시, 게이팅 로직 호출
+- 변경: `lib/schema.ts`에 `isPremium` 필드 추가(기본값 false)
+- 변경: `content/examples/ultrasonic.json`을 `isPremium: true`로 표시 — 실제 게이팅 동작을 검증할 실물 테스트 대상
+- 변경: `app/examples/[id]/page.tsx` — 서버 컴포넌트+SSG에서 클라이언트 컴포넌트+API fetch로 전환, 잠금 상태 UI(코드/설명 대신 "Premium 구독하기" 카드) 추가
+- 검증: 빌드 로그에서 `examples/[id]`가 `●`(SSG)→`ƒ`(Dynamic)로 바뀐 것 확인, 실제 HTTP로 무료 콘텐츠는 code 포함/Premium은 code 필드 자체가 없는 것 확인, 브라우저 스크린샷으로 잠금 UI 실제 렌더링 확인
+- 알려진 범위 밖 항목: `quiz` 필드는 현재 게이팅 대상에 포함하지 않음(정답이 잠긴 콘텐츠에도 노출됨) — 설계서에 명시된 범위(code/explain)만 우선 구현, 필요시 다음 버전에서 논의
+
 ## v1.2 — 2026-08-13
 
 **요약**: 초등학생 가입의 SMS 발송을 실제 외부 서비스(Solapi)로 정확히 연동. 이전 버전은 콘솔 로그만 찍고 화면에는 "보냈다"고 거짓으로 표시하던 문제가 있었음(사용자 실제 테스트 중 발견) — 이번에 바로잡음.

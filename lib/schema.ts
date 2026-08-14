@@ -32,6 +32,12 @@ export const ExampleSchema = z.object({
     .string()
     .optional()
     .describe("이 모듈의 코드가 어느 공식 예제에서 왔는지 (§6.5 소싱 전략)"),
+  isPremium: z
+    .boolean()
+    .default(false)
+    .describe(
+      "true면 code/explain은 구독자에게만 서버가 내려줌 (Design.md §7.2, 절대 SSG 금지)"
+    ),
 });
 
 export type Example = z.infer<typeof ExampleSchema>;

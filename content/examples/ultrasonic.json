@@ -23,5 +23,6 @@
     "answer": 1,
     "explain": "초음파는 물체에 부딪혀 반사되어 돌아오므로, 잰 시간은 '왕복' 시간입니다. 실제 거리(편도)를 구하려면 2로 나눠야 합니다."
   },
-  "sourceExample": "표준 HC-SR04 pulseIn() 패턴 (Arduino 커뮤니티 표준 예제) — avr-gcc 실제 컴파일 검증 통과"
+  "sourceExample": "표준 HC-SR04 pulseIn() 패턴 (Arduino 커뮤니티 표준 예제) — avr-gcc 실제 컴파일 검증 통과",
+  "isPremium": true
 }
