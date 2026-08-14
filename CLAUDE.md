@@ -33,16 +33,17 @@ Claude Code가 이 저장소에서 작업할 때 항상 먼저 읽어야 하는 
 - `lib/identity/childSignup.ts` — 초등학생 보호자 동의 재검증 로직 (절대 원칙 4번의 실제 구현, 단위테스트 6개로 검증됨).
 - `app/api/identity/*` — 로그인·로그아웃·비밀번호 찾기/재설정·프로필(me)·일반가입·초등학생 가입 2단계, 전부 라우트 존재. **단, 실제 Supabase 프로젝트 연결 전이라 Supabase 호출 지점에서는 에러가 남 — 이건 정상.** `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`를 `.env.local`에 채우면 바로 작동하도록 짜여 있음.
 - `lib/supabase/server.ts`, `lib/supabase/auth-context.ts` — Supabase 서버 클라이언트 + 인증 헬퍼.
-- `supabase/migrations/0001_init.sql` — DB 스키마 전체, 로컬 Postgres로 실제 실행 검증 완료(제약조건 포함).
+- `supabase/migrations/0001_init.sql`, `0002_tutor_usage_increment.sql` — DB 스키마 전체 + AI튜터 사용량 원자적 증가 함수, 둘 다 로컬 Postgres로 실제 실행·검증 완료(제약조건, 20개 동시요청 경쟁조건 테스트 포함). **Supabase에 처음 적용할 때 0001, 0002 순서대로 SQL Editor에서 실행할 것.**
 - `app/page.tsx`(랜딩), `app/login`, `app/signup`, `app/forgot-password` — 프로토타입에서 이식한 실제 화면, 위 API에 실제 연결됨. 콘텐츠 목록은 `app/examples`로 이동함.
 - `lib/sms/solapi.ts` — 실제 SMS 발송(Solapi). **설정 안 되어 있으면 명확히 실패함(성공한 척 안 함) — 이 원칙을 다른 외부 서비스 연동(포트원 등)에도 그대로 적용할 것.**
 - `lib/content/gate.ts` + `app/api/content/examples/[id]/route.ts` — §7.2(Premium 콘텐츠 SSG 금지)의 실제 구현. code/explain/quiz(정답 포함) 전부 게이팅 대상. `app/examples/[id]/page.tsx`는 더 이상 `generateStaticParams`를 쓰지 않음. **새 콘텐츠 관련 페이지를 만들 때 절대 이 패턴(정적 생성)으로 되돌리지 말 것.**
 - `app/api/learning/progress`, `app/api/learning/code`, `app/mypage/page.tsx` — 진도·저장코드 실데이터 연동, 전부 인증 필수.
+- `app/api/tutor/route.ts` — AI 튜터, **로그인 필수**(2026-08-13 결정), `lib/rate-limit-db.ts`(DB 기반, user_id 기준) 사용. 시스템 프롬프트에 예제 범위 밖 질문 거절 규칙 포함.
 - `lib/api-error-handler.ts` (`withErrorHandling`) — **모든 API 라우트는 이걸로 감싸야 함.** 안 감싸면 예상 못 한 예외가 HTML 에러 페이지로 나가서 클라이언트에 "서버에 연결할 수 없어요" 같은 오해를 주는 메시지가 뜬다(2026-08-13 실사용자 테스트 중 발견). **새 라우트를 만들 때 이 패턴을 반드시 따를 것.**
 
-## 아직 결정 안 된 것 (추측으로 진행하지 말고 다음에 반드시 확인)
+## 아직 결정 안 된 것
 
-- **AI 튜터가 비로그인 사용자도 쓸 수 있어야 하는지.** 지금 rate-limit은 IP 기준(익명 허용 전제)인데, user_id 기준으로 바꾸면 로그인이 사실상 필수가 됨. Free 플랜의 "하루 10회"가 익명 기준인지 로그인 기준인지 설계서에 명확히 없음 — 다음에 이 질문부터 확인할 것.
+(현재 없음 — 2026-08-13 AI튜터 로그인 필수 여부 결정으로 마지막 미결 항목 해소됨)
 
 ## 아직 안 된 것 (2단계 잔여)
 

@@ -2,6 +2,17 @@
 
 이 파일은 `makerstudio-web-scaffold_vX.X.zip`의 버전과 함께 관리됩니다. 문서(design doc 등)와 마찬가지로, 코드를 전달할 때마다 버전을 올리고 여기에 한 줄씩 남깁니다.
 
+## v1.7 — 2026-08-13
+
+**요약**: AI 튜터를 로그인 필수로 전환 (대표님과 비용/복잡도 논의 후 결정). rate-limit을 IP→user_id(DB) 기준으로 전환, 주제 범위 밖 질문 거절 규칙 추가.
+
+- 신규: `supabase/migrations/0002_tutor_usage_increment.sql` — 원자적 증가 RPC 함수. **로컬 Postgres로 20개 동시요청 테스트 실행 → 정확히 10개만 허용되는 것 확인 (경쟁조건 없음)**
+- 신규: `lib/rate-limit-db.ts` — 위 RPC를 호출하는 DB 기반 rate limiter, 확인 실패 시 fail-closed
+- 변경: `app/api/tutor/route.ts` — 로그인 필수(`getAuthedUser`), DB 기반 rate limit로 교체, 시스템 프롬프트에 "예제 범위 밖 질문 거절" 규칙 추가, `withErrorHandling`으로 감쌈
+- 변경: `AiTutorPanel.tsx` — Authorization 헤더 전송, 401 시 "로그인하러 가기" 안내 카드 표시
+- 검증: 비로그인 상태로 튜터 호출 → 401 확인, 브라우저 스크린샷으로 로그인 유도 UI 실제 렌더링 확인, 클린룸 재검증(테스트14+빌드) 통과
+- **결정 배경 요약**: IP 기준 제한은 VPN 등으로 쉽게 우회되어 비용 방어가 약함 / tutor_usage 테이블이 원래 user_id 기준으로 설계되어 있어 오히려 더 단순 / 랜딩페이지 데모는 정적 목업이라 마케팅 훅과 무관 / 무료 콘텐츠는 비로그인 열람 가능, 튜터 사용 시점에만 가입 유도
+
 ## v1.6 — 2026-08-13
 
 **요약**: 실사용자 테스트 중 발견된 버그 수정 — 회원가입 시 "서버에 연결할 수 없어요"라는 오해를 주는 메시지가 뜨는 문제. 원인은 `getSupabaseServerClient()`가 환경변수 누락 시 던지는 예외를 감싸는 안전망이 없어서, Next.js가 HTML 에러 페이지를 반환하고 클라이언트의 `res.json()`이 파싱에 실패해 엉뚱한 메시지를 보여준 것.

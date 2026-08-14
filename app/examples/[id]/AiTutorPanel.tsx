@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 
 type Line = { role: "user" | "bot" | "sys"; text: string };
 
@@ -12,15 +13,22 @@ export function AiTutorPanel({
   stepName: string;
 }) {
   const [lines, setLines] = useState<Line[]>([
-    { role: "sys", text: "AI 튜터가 준비되었습니다. 이 예제에 대해 무엇이든 물어보세요. (무료 플랜: 하루 10회)" },
+    { role: "sys", text: "AI 튜터가 준비되었습니다. 이 예제에 대해 무엇이든 물어보세요. (무료 플랜: 하루 10회, 로그인 필요)" },
   ]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [remaining, setRemaining] = useState<number | null>(null);
+  const [needsLogin, setNeedsLogin] = useState(false);
 
   async function ask(preset?: string) {
     const question = preset ?? input.trim();
     if (!question || busy) return;
+
+    const token = typeof window !== "undefined" ? localStorage.getItem("ms_access_token") : null;
+    if (!token) {
+      setNeedsLogin(true);
+      return;
+    }
 
     setLines((prev) => [...prev, { role: "user", text: question }]);
     setInput("");
@@ -29,12 +37,15 @@ export function AiTutorPanel({
     try {
       const res = await fetch("/api/tutor", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ question, exampleLabel, stepName }),
       });
       const data = await res.json();
 
-      if (!res.ok) {
+      if (res.status === 401) {
+        setNeedsLogin(true);
+        setLines((prev) => [...prev, { role: "sys", text: "⚠ 로그인이 필요해요." }]);
+      } else if (!res.ok) {
         setLines((prev) => [...prev, { role: "sys", text: `⚠ ${data.message ?? "오류가 발생했어요."}` }]);
       } else {
         setLines((prev) => [...prev, { role: "bot", text: data.answer }]);
@@ -54,6 +65,13 @@ export function AiTutorPanel({
         정답을 바로 알려주지 않고, 단계별 힌트와 원리를 함께 설명해줘요.
         {remaining !== null && <> · 오늘 남은 질문 {remaining}회</>}
       </p>
+
+      {needsLogin && (
+        <div style={{ background: "var(--sage-pale)", border: "1px solid var(--line-strong)", borderRadius: 8, padding: 12, marginBottom: 10, textAlign: "center" }}>
+          <p style={{ fontSize: 13, margin: "0 0 8px" }}>AI 튜터에게 물어보려면 로그인이 필요해요</p>
+          <Link href="/login" className="btn btnCoral" style={{ fontSize: 13, padding: "7px 16px" }}>로그인하러 가기</Link>
+        </div>
+      )}
 
       <div
         style={{

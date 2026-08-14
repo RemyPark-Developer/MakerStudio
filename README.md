@@ -120,7 +120,7 @@ scripts/
 이 저장소에는 `CLAUDE.md`가 있습니다 — Claude Code가 세션마다 자동으로 읽는 파일로, 절대 원칙(미성년자 결제 차단, Premium 콘텐츠 게이팅 등)과 지금까지 구현된 것을 요약해뒀습니다.
 
 - `docs/` — 설계서·MVP범위·API명세·DB스키마·인증플로우·비기능요구사항·개발순서표 7종 전체
-- `supabase/migrations/0001_init.sql` — DB 스키마 문서를 실제 SQL로 옮긴 것. 로컬 Postgres에 실제로 실행해서 제약조건(역할 체크, 보호자 동의 필수 등)이 의도대로 작동하는지 확인 완료.
+- `supabase/migrations/0001_init.sql`, `0002_tutor_usage_increment.sql` — DB 스키마 문서를 실제 SQL로 옮긴 것 + AI튜터 사용량 원자적 증가 함수. 로컬 Postgres에 실제로 실행해서 제약조건(역할 체크, 보호자 동의 필수 등)과 동시요청 경쟁조건 없음까지 확인 완료. **Supabase 프로젝트에 처음 적용할 때 0001, 0002 순서대로 SQL Editor에서 실행하세요.**
 
 새 세션을 시작할 때는 `docs/MakerStudio_Dev_Sequence_v1.0.md`를 열어 아직 안 끝난 가장 앞 단계부터 진행하세요.
 
