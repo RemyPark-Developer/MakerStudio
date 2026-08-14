@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 
 export default function LoginPage() {
@@ -8,6 +8,13 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    // 이미 로그인된 상태로 /login에 다시 들어오면, 굳이 또 로그인시키지 않고 마이페이지로 보낸다.
+    if (localStorage.getItem("ms_access_token")) {
+      window.location.href = "/mypage";
+    }
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

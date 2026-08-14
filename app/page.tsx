@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { NavAuthButtons } from "./NavAuthButtons";
 
 export default function LandingPage() {
   return (
@@ -9,8 +10,7 @@ export default function LandingPage() {
             <span className="dot" /> MAKERSTUDIO
           </div>
           <div style={{ display: "flex", gap: 10 }}>
-            <Link href="/login" className="btn btnOutline">로그인</Link>
-            <Link href="/signup" className="btn btnCoral">무료로 시작하기</Link>
+            <NavAuthButtons />
           </div>
         </div>
       </div>
