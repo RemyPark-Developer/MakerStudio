@@ -2,6 +2,15 @@
 
 이 파일은 `makerstudio-web-scaffold_vX.X.zip`의 버전과 함께 관리됩니다. 문서(design doc 등)와 마찬가지로, 코드를 전달할 때마다 버전을 올리고 여기에 한 줄씩 남깁니다.
 
+## v2.8 — 2026-08-14
+
+**요약**: 실제 포트원(KG이니시스 V2 테스트 채널) 연동 중 발견된 버그 수정. "이니시스 V2 일반 결제의 경우 구매자 이메일은 필수 입력입니다"라는 실제 에러로 발견 — `PortOne.requestPayment()` 호출 시 `customer.email`을 안 보내고 있었음.
+
+- 변경: `lib/supabase/auth-context.ts`의 `AuthedUser`에 `email` 필드 추가
+- 변경: `app/api/identity/me/route.ts` — 응답에 `email` 포함
+- 변경: `app/checkout/page.tsx` — 결제 요청 전 `/api/identity/me`로 로그인한 사용자(보호자)의 이메일을 가져와 `customer.email`로 전달
+- 검증: 빌드 통과, 테스트22개 전부 통과, 클린룸 재검증 통과. **실제 KG이니시스 테스트 채널로 결제창까지 뜨는지는 대표님이 이어서 확인 필요**
+
 ## v2.7 — 2026-08-14
 
 **요약**: Dev_Sequence.md 5단계(결제) 구현 — 포트원(PortOne) V2 연동. 처음 가정했던 "서버가 결제 세션을 만드는" 구조가 아니라 실제로는 "브라우저에서 결제창을 직접 열고 서버는 검증만 하는" 구조라는 걸 재조사로 확인하고 정확하게 구현.

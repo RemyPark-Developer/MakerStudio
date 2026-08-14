@@ -37,6 +37,14 @@ function CheckoutPageInner() {
 
       const paymentId = `ms-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
+      const meRes = await authedFetch("/api/identity/me");
+      const me = await meRes.json();
+      if (!meRes.ok || !me.email) {
+        setErrorMsg("결제자 이메일 정보를 확인하지 못했어요. 다시 로그인해주세요.");
+        setStatus("error");
+        return;
+      }
+
       const response = await PortOne.requestPayment({
         storeId: process.env.NEXT_PUBLIC_PORTONE_STORE_ID!,
         channelKey: process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY!,
@@ -45,6 +53,8 @@ function CheckoutPageInner() {
         totalAmount: 9900,
         currency: "CURRENCY_KRW" as any,
         payMethod: "CARD" as any,
+        // 이니시스 V2 일반결제는 구매자 이메일이 필수 — 실사용자 테스트 중 발견(2026-08-14).
+        customer: { email: me.email },
         // 웹훅이 나중에 비동기로 도착했을 때, 이 결제가 누구의 어떤 구독인지 알 수 있게
         // customData에 실어 보낸다 (webhook/portone/route.ts에서 이 값을 읽음).
         customData: { childId, planId },

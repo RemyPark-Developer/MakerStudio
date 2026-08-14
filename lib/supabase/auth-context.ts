@@ -3,6 +3,7 @@ import { getSupabaseServerClient } from "./server";
 
 export type AuthedUser = {
   id: string;
+  email: string | null;
   role: "student_teen" | "student_child" | "guardian" | "admin";
   nickname: string | null;
 };
@@ -47,7 +48,7 @@ export async function getAuthedUser(req: NextRequest): Promise<AuthedUser | null
   }
 
   console.log("[getAuthedUser] 최종 성공:", profile);
-  return { id: data.user.id, role: profile.role, nickname: profile.nickname };
+  return { id: data.user.id, email: data.user.email ?? null, role: profile.role, nickname: profile.nickname };
 }
 
 /** guardian 전용 라우트에서 쓰는 짧은 가드. Auth_Flow.md §3 매트릭스 참고. */

@@ -28,7 +28,7 @@ export const GET = withErrorHandling(async (req: NextRequest) => {
     return NextResponse.json({ needsNickname: true });
   }
 
-  return NextResponse.json({ needsNickname: false, ...profile });
+  return NextResponse.json({ needsNickname: false, email: authData.user.email ?? null, ...profile });
 });
 
 export const PATCH = withErrorHandling(async (req: NextRequest) => {
