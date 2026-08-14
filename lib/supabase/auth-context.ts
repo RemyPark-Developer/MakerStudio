@@ -16,21 +16,37 @@ export type AuthedUser = {
  */
 export async function getAuthedUser(req: NextRequest): Promise<AuthedUser | null> {
   const authHeader = req.headers.get("authorization");
-  if (!authHeader?.startsWith("Bearer ")) return null;
+  if (!authHeader?.startsWith("Bearer ")) {
+    console.log("[getAuthedUser] Authorization 헤더 없음 또는 형식 이상 →", authHeader?.slice(0, 20));
+    return null;
+  }
   const token = authHeader.slice("Bearer ".length);
+  console.log("[getAuthedUser] 토큰 앞부분:", token.slice(0, 20) + "...");
 
   const supabase = getSupabaseServerClient();
   const { data, error } = await supabase.auth.getUser(token);
-  if (error || !data?.user) return null;
+  if (error || !data?.user) {
+    console.log("[getAuthedUser] auth.getUser 실패:", JSON.stringify(error));
+    return null;
+  }
+  console.log("[getAuthedUser] auth.getUser 성공, user.id =", data.user.id);
 
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select("role, nickname")
     .eq("id", data.user.id)
     .maybeSingle();
 
-  if (!profile) return null; // auth.users엔 있지만 profiles가 아직 없음 = 온보딩 미완료
+  if (profileError) {
+    console.log("[getAuthedUser] profiles 조회 에러:", JSON.stringify(profileError));
+    return null;
+  }
+  if (!profile) {
+    console.log("[getAuthedUser] profiles 조회는 성공했지만 행이 없음 (id 불일치 의심), 찾던 id =", data.user.id);
+    return null; // auth.users엔 있지만 profiles가 아직 없음 = 온보딩 미완료
+  }
 
+  console.log("[getAuthedUser] 최종 성공:", profile);
   return { id: data.user.id, role: profile.role, nickname: profile.nickname };
 }
 
