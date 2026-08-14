@@ -26,7 +26,7 @@ export default function LoginPage() {
       }
       // MVP: 토큰을 localStorage에 저장. Phase 3 이후 httpOnly 쿠키 전환 검토 (NFR.md §3 보안 섹션 참고).
       localStorage.setItem("ms_access_token", data.accessToken);
-      window.location.href = "/examples";
+      window.location.href = "/mypage";
     } catch {
       setError("서버에 연결할 수 없어요. 잠시 후 다시 시도해주세요.");
     } finally {
