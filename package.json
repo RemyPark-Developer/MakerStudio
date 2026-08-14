@@ -15,6 +15,8 @@
     "@supabase/supabase-js": "^2.45.0",
     "solapi": "^5.2.0",
     "resend": "^4.0.0",
+    "@portone/server-sdk": "^0.13.0",
+    "@portone/browser-sdk": "^0.0.14",
     "next": "^15.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

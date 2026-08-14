@@ -2,6 +2,19 @@
 
 이 파일은 `makerstudio-web-scaffold_vX.X.zip`의 버전과 함께 관리됩니다. 문서(design doc 등)와 마찬가지로, 코드를 전달할 때마다 버전을 올리고 여기에 한 줄씩 남깁니다.
 
+## v2.7 — 2026-08-14
+
+**요약**: Dev_Sequence.md 5단계(결제) 구현 — 포트원(PortOne) V2 연동. 처음 가정했던 "서버가 결제 세션을 만드는" 구조가 아니라 실제로는 "브라우저에서 결제창을 직접 열고 서버는 검증만 하는" 구조라는 걸 재조사로 확인하고 정확하게 구현.
+
+- 신규: `lib/billing/refund.ts` — 일할계산 환불 로직(§4.5), 데모에서 검증했던 정확한 사례(₩9,900×29/31=₩9,261) 포함 단위테스트 7개
+- 신규: `lib/billing/portone.ts` — 포트원 결제 검증. **클라이언트가 보낸 금액을 절대 신뢰하지 않고 포트원 서버에서 재조회**
+- 신규: `lib/billing/activateSubscription.ts` — 구독 활성화 공용 로직, **멱등성 보장**(같은 결제가 checkout/verify와 webhook 양쪽에서 와도 한 번만 처리)
+- 신규: `app/api/billing/*` 6개 라우트 — plans, checkout/verify, subscription/cancel, refund/calculate, history, webhook/portone
+- 신규: `app/checkout/page.tsx` — 실제 `@portone/browser-sdk`로 결제창을 여는 클라이언트 페이지
+- 신규: `supabase/migrations/0005_subscriptions_unique.sql` — `subscriptions`에 (guardian_id, child_id) 유니크 제약. **로컬 Postgres로 재구독 시나리오(같은 조합으로 두 번 upsert) 실제 테스트 — 새 행이 아니라 기존 행이 갱신되는 것 확인**
+- 검증: 환불계산 테스트 7개 전부 통과(총 22개), 마이그레이션 0001~0005 순서대로 재적용 확인, 웹훅 서명 검증 — **가짜 서명은 401로 거부, 시크릿 자체가 없으면 500으로 명확히 구분**되는 것 실제 서버로 확인. 클린룸 재검증(테스트22+빌드) 통과
+- **라이브 테스트 필요**: 포트원 실계정으로 실제 결제창이 뜨고, checkout/verify와 webhook이 실제 결제 데이터로 정확히 맞물리는지는 대표님의 포트원 콘솔 "테스트 결제" 기능으로 확인 필요
+
 ## v2.6 — 2026-08-14
 
 **요약**: v2.5에서 이메일 인증을 필수로 만든 뒤, 인증 메일 발송이 한 번 실패하면(스팸함, 설정 문제, 오타 등) 그 이메일로 재가입도 안 되고 인증 메일 재발송도 안 되는 "막다른 골목"이 생기는 걸 실사용자 테스트 중 발견 — 수정.
