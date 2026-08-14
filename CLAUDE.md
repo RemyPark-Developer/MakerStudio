@@ -39,7 +39,7 @@ Claude Code가 이 저장소에서 작업할 때 항상 먼저 읽어야 하는 
 - `lib/content/gate.ts` + `app/api/content/examples/[id]/route.ts` — §7.2(Premium 콘텐츠 SSG 금지)의 실제 구현. code/explain/quiz(정답 포함) 전부 게이팅 대상. `app/examples/[id]/page.tsx`는 더 이상 `generateStaticParams`를 쓰지 않음. **새 콘텐츠 관련 페이지를 만들 때 절대 이 패턴(정적 생성)으로 되돌리지 말 것.**
 - `app/api/learning/progress`, `app/api/learning/code`, `app/mypage/page.tsx` — 진도·저장코드 실데이터 연동, 전부 인증 필수.
 - `app/api/tutor/route.ts` — AI 튜터, **로그인 필수**(2026-08-13 결정), `lib/rate-limit-db.ts`(DB 기반, user_id 기준) 사용. 시스템 프롬프트에 예제 범위 밖 질문 거절 규칙 포함.
-- `lib/client-auth.ts` (`authedFetch`) — **인증이 필요한 API를 클라이언트에서 호출할 땐 항상 이 함수를 써야 함, 원시 `fetch`+수동 헤더 방식 금지.** 액세스 토큰 만료(기본 1시간) 시 자동으로 리프레시 토큰으로 갱신 후 재시도한다. 이게 없으면 "로그인했는데 1시간 뒤 다시 로그인하라고 뜨는" 문제가 재발한다(2026-08-13 실사용자 테스트 중 발견).
+- `lib/client-auth.ts` (`authedFetch`) — **인증이 필요한 API를 클라이언트에서 호출할 땐 항상 이 함수를 써야 함, 원시 `fetch`+수동 헤더 방식 금지.** 액세스 토큰 만료(기본 1시간) 시 자동으로 리프레시 토큰으로 갱신 후 재시도한다. **동시에 여러 요청이 401을 받아도 갱신은 1번만 일어나도록 락이 걸려있음(2026-08-13 경쟁조건 버그 수정) — 이 락을 제거하지 말 것.**
 - `lib/api-error-handler.ts` (`withErrorHandling`) — **모든 API 라우트는 이걸로 감싸야 함.** 안 감싸면 예상 못 한 예외가 HTML 에러 페이지로 나가서 클라이언트에 "서버에 연결할 수 없어요" 같은 오해를 주는 메시지가 뜬다(2026-08-13 실사용자 테스트 중 발견). **새 라우트를 만들 때 이 패턴을 반드시 따를 것.**
 
 ## 아직 결정 안 된 것
