@@ -7,6 +7,21 @@ type Branch = "teen" | "child";
 
 export default function SignupPage() {
   const [branch, setBranch] = useState<Branch>("teen");
+  const [done, setDone] = useState(false);
+
+  // 가입이 끝나면, "누구신가요?" 선택 화면으로 되돌아가지 않고 완료 화면만 깔끔하게 보여준다.
+  // (2026-08-14 수정 — 이전엔 가입 완료 메시지 위에 역할 선택 탭이 계속 남아있어서 혼란스러웠음)
+  if (done) {
+    return (
+      <main className="authWrap">
+        <div className="card center">
+          <div className="tab">회원가입</div>
+          <p style={{ fontSize: 15, margin: "16px 0" }}>🎉 가입이 완료됐어요! 이제 로그인해주세요.</p>
+          <Link href="/login" className="btn btnCoral fullBtn">로그인하러 가기</Link>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="authWrap">
@@ -32,19 +47,22 @@ export default function SignupPage() {
           </button>
         </div>
 
-        {branch === "teen" ? <TeenSignupForm /> : <ChildSignupForm />}
+        {branch === "teen" ? (
+          <TeenSignupForm onDone={() => setDone(true)} />
+        ) : (
+          <ChildSignupForm onDone={() => setDone(true)} />
+        )}
       </div>
     </main>
   );
 }
 
-function TeenSignupForm() {
+function TeenSignupForm({ onDone }: { onDone: () => void }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [nickname, setNickname] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [done, setDone] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -61,21 +79,12 @@ function TeenSignupForm() {
         setError(data.message ?? "가입에 실패했어요.");
         return;
       }
-      setDone(true);
+      onDone();
     } catch {
       setError("서버에 연결할 수 없어요.");
     } finally {
       setLoading(false);
     }
-  }
-
-  if (done) {
-    return (
-      <div>
-        <p>🎉 가입이 완료됐어요! 이제 로그인해주세요.</p>
-        <Link href="/login" className="btn btnCoral fullBtn">로그인하러 가기</Link>
-      </div>
-    );
   }
 
   return (
@@ -96,7 +105,7 @@ function TeenSignupForm() {
   );
 }
 
-function ChildSignupForm() {
+function ChildSignupForm({ onDone }: { onDone: () => void }) {
   const [step, setStep] = useState<1 | 2>(1);
   const [nickname, setNickname] = useState("");
   const [guardianPhone, setGuardianPhone] = useState("");
@@ -105,7 +114,6 @@ function ChildSignupForm() {
   const [agree, setAgree] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [done, setDone] = useState(false);
 
   async function startVerify(e: React.FormEvent) {
     e.preventDefault();
@@ -146,21 +154,12 @@ function ChildSignupForm() {
         setError(data.message ?? "인증에 실패했어요.");
         return;
       }
-      setDone(true);
+      onDone();
     } catch {
       setError("서버에 연결할 수 없어요.");
     } finally {
       setLoading(false);
     }
-  }
-
-  if (done) {
-    return (
-      <div>
-        <p>🎉 가입이 완료됐어요!</p>
-        <Link href="/login" className="btn btnCoral fullBtn">로그인하러 가기</Link>
-      </div>
-    );
   }
 
   if (step === 1) {
