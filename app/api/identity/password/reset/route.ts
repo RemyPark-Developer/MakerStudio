@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { withErrorHandling } from "@/lib/api-error-handler";
 
-export async function POST(req: NextRequest) {
+export const POST = withErrorHandling(async (req: NextRequest) => {
   const body = await req.json().catch(() => null);
   const resetToken: string | undefined = body?.resetToken;
   const newPassword: string | undefined = body?.newPassword;
@@ -31,4 +32,4 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ ok: true });
-}
+});

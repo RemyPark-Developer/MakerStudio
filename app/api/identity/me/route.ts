@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { withErrorHandling } from "@/lib/api-error-handler";
 
-export async function GET(req: NextRequest) {
+export const GET = withErrorHandling(async (req: NextRequest) => {
   const authHeader = req.headers.get("authorization");
   if (!authHeader?.startsWith("Bearer ")) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -26,9 +27,9 @@ export async function GET(req: NextRequest) {
   }
 
   return NextResponse.json({ needsNickname: false, ...profile });
-}
+});
 
-export async function PATCH(req: NextRequest) {
+export const PATCH = withErrorHandling(async (req: NextRequest) => {
   const user = await getAuthedUserOrNewSocialUser(req);
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
@@ -63,7 +64,7 @@ export async function PATCH(req: NextRequest) {
   }
 
   return NextResponse.json({ ok: true });
-}
+});
 
 async function getAuthedUserOrNewSocialUser(
   req: NextRequest

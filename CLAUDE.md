@@ -38,6 +38,7 @@ Claude Code가 이 저장소에서 작업할 때 항상 먼저 읽어야 하는 
 - `lib/sms/solapi.ts` — 실제 SMS 발송(Solapi). **설정 안 되어 있으면 명확히 실패함(성공한 척 안 함) — 이 원칙을 다른 외부 서비스 연동(포트원 등)에도 그대로 적용할 것.**
 - `lib/content/gate.ts` + `app/api/content/examples/[id]/route.ts` — §7.2(Premium 콘텐츠 SSG 금지)의 실제 구현. code/explain/quiz(정답 포함) 전부 게이팅 대상. `app/examples/[id]/page.tsx`는 더 이상 `generateStaticParams`를 쓰지 않음. **새 콘텐츠 관련 페이지를 만들 때 절대 이 패턴(정적 생성)으로 되돌리지 말 것.**
 - `app/api/learning/progress`, `app/api/learning/code`, `app/mypage/page.tsx` — 진도·저장코드 실데이터 연동, 전부 인증 필수.
+- `lib/api-error-handler.ts` (`withErrorHandling`) — **모든 API 라우트는 이걸로 감싸야 함.** 안 감싸면 예상 못 한 예외가 HTML 에러 페이지로 나가서 클라이언트에 "서버에 연결할 수 없어요" 같은 오해를 주는 메시지가 뜬다(2026-08-13 실사용자 테스트 중 발견). **새 라우트를 만들 때 이 패턴을 반드시 따를 것.**
 
 ## 아직 결정 안 된 것 (추측으로 진행하지 말고 다음에 반드시 확인)
 

@@ -2,6 +2,15 @@
 
 이 파일은 `makerstudio-web-scaffold_vX.X.zip`의 버전과 함께 관리됩니다. 문서(design doc 등)와 마찬가지로, 코드를 전달할 때마다 버전을 올리고 여기에 한 줄씩 남깁니다.
 
+## v1.6 — 2026-08-13
+
+**요약**: 실사용자 테스트 중 발견된 버그 수정 — 회원가입 시 "서버에 연결할 수 없어요"라는 오해를 주는 메시지가 뜨는 문제. 원인은 `getSupabaseServerClient()`가 환경변수 누락 시 던지는 예외를 감싸는 안전망이 없어서, Next.js가 HTML 에러 페이지를 반환하고 클라이언트의 `res.json()`이 파싱에 실패해 엉뚱한 메시지를 보여준 것.
+
+- 신규: `lib/api-error-handler.ts` — `withErrorHandling` 래퍼. 예상 못 한 예외를 잡아서 항상 JSON으로, 실제 에러 메시지와 함께 응답
+- 수정: identity 도메인 7개 라우트(signup, login, logout, me, password/reset, learning/progress, learning/code) 전부 이 래퍼로 감쌈
+- 검증: 환경변수를 실제로 비워서 재현 → 이전엔 애매했을 상황에서 **"SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY가 설정되지 않았습니다"라는 정확한 원인이 실제로 화면에 뜨는 것 확인**. 클린룸 재검증(테스트14+빌드) 통과
+- **주의(다음 버전에서 재검토 필요)**: 지금은 개발 편의를 위해 실제 에러 메시지를 그대로 노출함. 프로덕션 전환 시 사용자에게는 일반화된 메시지만 보여주고 상세 내용은 서버 로그로만 남기도록 바꿔야 함(NFR.md §3 보안 섹션과 연결)
+
 ## v1.5 — 2026-08-13
 
 **요약**: Dev_Sequence.md 4단계(마이페이지 실데이터 연동) 착수 — 진도·저장코드 API + 실제 마이페이지 화면.

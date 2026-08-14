@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthedUser } from "@/lib/supabase/auth-context";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { withErrorHandling } from "@/lib/api-error-handler";
 
-export async function GET(req: NextRequest) {
+export const GET = withErrorHandling(async (req: NextRequest) => {
   const user = await getAuthedUser(req);
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
@@ -17,9 +18,9 @@ export async function GET(req: NextRequest) {
   }
 
   return NextResponse.json({ progress: data ?? [] });
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withErrorHandling(async (req: NextRequest) => {
   const user = await getAuthedUser(req);
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
@@ -46,4 +47,4 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ ok: true });
-}
+});

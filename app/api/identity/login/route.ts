@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { withErrorHandling } from "@/lib/api-error-handler";
 
-export async function POST(req: NextRequest) {
+export const POST = withErrorHandling(async (req: NextRequest) => {
   const body = await req.json().catch(() => null);
   const email: string | undefined = body?.email?.trim();
   const password: string | undefined = body?.password;
@@ -29,4 +30,4 @@ export async function POST(req: NextRequest) {
     refreshToken: data.session.refresh_token,
     expiresAt: data.session.expires_at,
   });
-}
+});

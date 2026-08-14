@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { withErrorHandling } from "@/lib/api-error-handler";
 
 /**
  * 중고등/성인 이메일 회원가입.
@@ -7,7 +8,7 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
  * 있는데 그 계정을 만드는 경로가 빠져있던 걸 실제 구현 중 발견해서 추가함.
  * 다음 API 명세서 개정 시 이 엔드포인트를 문서에도 반영할 것.
  */
-export async function POST(req: NextRequest) {
+export const POST = withErrorHandling(async (req: NextRequest) => {
   const body = await req.json().catch(() => null);
   const email: string | undefined = body?.email?.trim();
   const password: string | undefined = body?.password;
@@ -59,4 +60,4 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ userId: authData.user.id });
-}
+});
