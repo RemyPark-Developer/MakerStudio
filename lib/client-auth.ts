@@ -71,6 +71,9 @@ async function doRefresh(): Promise<string | null> {
     localStorage.setItem("ms_refresh_token", data.refreshToken);
     return data.accessToken as string;
   } catch {
+    // 네트워크 에러 등으로 refresh 자체가 실패해도 무효 토큰을 남겨두면 login↔mypage 무한루프가 생긴다.
+    localStorage.removeItem("ms_access_token");
+    localStorage.removeItem("ms_refresh_token");
     return null;
   }
 }

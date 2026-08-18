@@ -30,6 +30,18 @@ export default function ExamplePage() {
   const params = useParams<{ id: string }>();
   const [data, setData] = useState<GatedExample | null>(null);
   const [notFound, setNotFound] = useState(false);
+  const [childId, setChildId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("ms_access_token") : null;
+    if (!token) return;
+    fetch("/api/identity/me", { headers: { Authorization: `Bearer ${token}` } })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((me) => {
+        if (me?.childId) setChildId(me.childId);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const token = typeof window !== "undefined" ? localStorage.getItem("ms_access_token") : null;
@@ -86,7 +98,12 @@ export default function ExamplePage() {
             이 모듈은 Premium 콘텐츠예요. 구독하시면 전체 코드, 코드 설명, AI 튜터까지 모두
             이용하실 수 있어요.
           </p>
-          <Link href="/" className="btn btnCoral fullBtn">Premium 구독하기</Link>
+          <Link
+            href={childId ? `/checkout?childId=${childId}&planId=premium` : "/mypage"}
+            className="btn btnCoral fullBtn"
+          >
+            Premium 구독하기
+          </Link>
         </div>
       ) : (
         <>

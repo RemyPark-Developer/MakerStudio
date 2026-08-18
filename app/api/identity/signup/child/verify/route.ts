@@ -1,3 +1,4 @@
+import { getAuthedUser } from "@/lib/supabase/auth-context";
 import { NextRequest, NextResponse } from "next/server";
 import { verifyChildSignup } from "@/lib/identity/childSignup";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
@@ -44,10 +45,24 @@ export async function POST(req: NextRequest) {
     });
     if (authError || !authUser?.user) throw authError ?? new Error("auth user creation failed");
 
-    // TODO(Phase 3): guardianPhone으로 기존 보호자 계정을 찾거나 새로 만들어
-    // guardian_child_links에 consent_verified_at = now()로 연결하는 로직 추가.
-    // (지금은 보호자 로그인 체계가 아직 없어 이 부분만 미완성 — Dev_Sequence.md 2단계 범위)
-
+    // guardian_child_links 연결: 이 요청을 보낸 브라우저에 로그인된 guardian이 있으면 연결한다.
+    // (guardianPhone은 §3.2 법적 요건에 따른 SMS 동의 확인용이고, 실제 연결 주체 식별은
+    //  로그인 세션의 guardian id로 하는 게 더 안전하다 - 전화번호 매칭보다 오탐 위험이 없음)
+    const guardian = await getAuthedUser(req);
+    if (guardian && guardian.role === "guardian") {
+      const { error: linkError } = await supabase.from("guardian_child_links").insert({
+        guardian_id: guardian.id,
+        child_id: authUser.user.id,
+        consent_verified_at: new Date().toISOString(),
+        consent_method: "sms",
+      });
+      if (linkError) {
+        // 자녀 계정 자체는 생성됐으니 흐름은 계속 진행하고, 연결 실패만 로깅한다.
+        console.error("guardian_child_links insert 실패:", JSON.stringify(linkError));
+      }
+    }
+    // guardian이 로그인 안 된 상태(아동 단독 자가가입)라면 연결은 Phase 3 범위로 남는다.
+    
     return NextResponse.json({ userId: authUser.user.id, nickname: result.nickname });
   } catch (err) {
     console.error("child signup finalize error:", err);

@@ -22,6 +22,7 @@ import { sendVerificationEmail } from "@/lib/email/resend";
  */
 export const POST = withErrorHandling(async (req: NextRequest) => {
   const body = await req.json().catch(() => null);
+  const phone = body?.phone ?? null;
   const email: string | undefined = body?.email?.trim();
   const password: string | undefined = body?.password;
   const nickname: string | undefined = body?.nickname?.trim();
@@ -52,7 +53,7 @@ export const POST = withErrorHandling(async (req: NextRequest) => {
     email,
     password,
     email_confirm: false, // ⚠️ 실제 이메일 확인 전까지는 미확정 상태로 만든다
-    user_metadata: { role: "student_teen", nickname }, // §3.3: 소셜/이메일 가입은 만 14세 이상으로 간주
+    user_metadata: { role: "student_teen", nickname, phone }, // §3.3: 소셜/이메일 가입은 만 14세 이상으로 간주
   });
 
   let targetUserId: string;

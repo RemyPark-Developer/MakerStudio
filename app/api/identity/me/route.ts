@@ -28,7 +28,23 @@ export const GET = withErrorHandling(async (req: NextRequest) => {
     return NextResponse.json({ needsNickname: true });
   }
 
-  return NextResponse.json({ needsNickname: false, email: authData.user.email ?? null, ...profile });
+  // guardian이면 내 자녀의 id도 같이 내려준다 (현재 스코프: guardian 1명 = 자녀 1명, 설계서 §10 참고)
+  let childId: string | null = null;
+  if (profile.role === "guardian") {
+    const { data: child } = await supabase
+      .from("guardian_child_links")
+      .select("child_id")
+      .eq("guardian_id", authData.user.id)
+      .maybeSingle();
+      childId = child?.child_id ?? null;
+  }
+
+  return NextResponse.json({
+    needsNickname: false,
+    email: authData.user.email ?? null,
+    ...profile,
+    childId,
+  });
 });
 
 export const PATCH = withErrorHandling(async (req: NextRequest) => {

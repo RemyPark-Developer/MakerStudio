@@ -69,9 +69,13 @@ function TeenSignupForm({ onDone }: { onDone: () => void }) {
     setError(null);
     setLoading(true);
     try {
-      const res = await fetch("/api/identity/signup", {
+      const token = typeof window !== "undefined" ? localStorage.getItem("ms_access_token") : null;
+      const res = await fetch("/api/identity/signup/child/verify", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ email, password, nickname }),
       });
       const data = await res.json();
@@ -144,9 +148,13 @@ function ChildSignupForm({ onDone }: { onDone: () => void }) {
     setError(null);
     setLoading(true);
     try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("ms_access_token") : null;
       const res = await fetch("/api/identity/signup/child/verify", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ verifyToken, smsCode, agreeChildPrivacy: agree }),
       });
       const data = await res.json();

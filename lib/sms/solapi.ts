@@ -29,6 +29,13 @@ function getService(): SolapiMessageService {
 }
 
 export async function sendVerificationSms(to: string, code: string): Promise<void> {
+  // 개발 환경(Solapi 키 미설정 시)에는 실제 발송 대신 콘솔에 인증번호를 출력한다.
+  // 운영 환경에서는 절대 이 분기를 타지 않도록, "키가 없을 때만" 우회한다 (안전장치).
+  if (process.env.NODE_ENV !== "production" && (!process.env.SOLAPI_API_KEY || !process.env.SOLAPI_API_SECRET)) {
+    console.log(`[DEV ONLY] SMS 발송 스킵 → ${to}에게 보낼 인증번호: ${code}`);
+    return;
+  }
+
   const senderNumber = process.env.SOLAPI_SENDER_NUMBER;
   if (!senderNumber) {
     throw new Error(
