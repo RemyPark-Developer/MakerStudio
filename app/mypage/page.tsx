@@ -49,8 +49,6 @@ export default function MyPage() {
 
   return (
     <main className="wrap">
-      <p><Link href="/">← 홈으로</Link></p>
-
       <div className="card">
         <div className="tab">학습 진행</div>
         <h2>내 진도</h2>
