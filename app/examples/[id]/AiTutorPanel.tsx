@@ -7,9 +7,11 @@ import { authedFetch } from "@/lib/client-auth";
 type Line = { role: "user" | "bot" | "sys"; text: string };
 
 export function AiTutorPanel({
+  exampleId,
   exampleLabel,
   stepName,
 }: {
+  exampleId: string;
   exampleLabel: string;
   stepName: string;
 }) {
@@ -34,7 +36,7 @@ export function AiTutorPanel({
       const res = await authedFetch("/api/tutor", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question, exampleLabel, stepName }),
+        body: JSON.stringify({ question, exampleId, exampleLabel, stepName }),
       });
       const data = await res.json();
 

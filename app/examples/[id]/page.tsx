@@ -138,7 +138,7 @@ export default function ExamplePage() {
       {!data.locked && (
         <div className="card">
           <div className="tab">AI · TUTOR</div>
-          <AiTutorPanel exampleLabel={data.label} stepName="학습 중" />
+          <AiTutorPanel exampleId={params.id} exampleLabel={data.label} stepName="학습 중" />
         </div>
       )}
     </main>

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthedUser } from "@/lib/supabase/auth-context";
 import { checkAndIncrementTutorUsage } from "@/lib/rate-limit-db";
 import { withErrorHandling } from "@/lib/api-error-handler";
+import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
@@ -35,6 +36,7 @@ export const POST = withErrorHandling(async (req: NextRequest) => {
 
   const body = await req.json().catch(() => null);
   const question: string | undefined = body?.question;
+  const exampleId: string | undefined = body?.exampleId;  
   const exampleLabel: string = body?.exampleLabel ?? "예제";
   const stepName: string = body?.stepName ?? "학습 중";
 
@@ -96,6 +98,19 @@ export const POST = withErrorHandling(async (req: NextRequest) => {
     const data = await response.json();
     const textBlocks = (data.content ?? []).filter((b: any) => b.type === "text").map((b: any) => b.text);
     const answer = textBlocks.join("\n").trim() || "죄송해요, 답변을 생성하지 못했어요.";
+
+    // 대화 기록 저장 (best-effort — 저장 실패해도 튜터 응답 자체는 정상적으로 내려준다)
+    if (exampleId) {
+      try {
+        const supabase = getSupabaseServerClient();
+        await supabase.from("tutor_messages").insert([
+          { user_id: user.id, example_id: exampleId, role: "user", content: question },
+          { user_id: user.id, example_id: exampleId, role: "assistant", content: answer },
+        ]);
+      } catch (logErr) {
+        console.error("tutor_messages 저장 실패:", logErr);
+      }
+    }
 
     return NextResponse.json({ answer, remaining: rl.remaining });
   } catch (err) {
