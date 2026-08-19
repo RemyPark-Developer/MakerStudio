@@ -131,7 +131,7 @@ export default function ExamplePage() {
       {!data.locked && data.quiz && (
         <div className="card">
           <div className="tab coral">Z1 · Quiz</div>
-          <QuizBlock quiz={data.quiz} />
+          <QuizBlock quiz={data.quiz} exampleId={params.id} />
         </div>
       )}
 
