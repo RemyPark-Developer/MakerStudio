@@ -75,18 +75,27 @@ Family 요금제(₩19,900/월, 최대 3명) 구독 그룹. **`guardian_child_li
 | `family_groups` | id, owner_id(FK→profiles.id, unique), plan_tier, seat_limit(=3 고정), status(`active`\|`canceled`), current_period_start/end, canceled_at, created_at, updated_at | 보호자당 1개. `owner_id` unique라서 결제 검증(verify)과 웹훅이 같은 결제를 중복 처리해도 자연히 멱등적 |
 | `family_group_members` | family_group_id(FK), child_id(FK→profiles.id, unique), added_at | 한 아이는 동시에 하나의 family_group에만 속함 |
 
-**⚠️ `payments`/`subscriptions` 테이블과 분리되어 있다** — Family 결제는 이 두 테이블에 별도로
-기록되고, 기존 `payments`(결제내역 화면)·환불 계산 로직에는 아직 반영되지 않는다(§2 제외 목록 참고).
+**`subscriptions`와는 분리되어 있다** — Family 요금제는 `subscriptions` row를 만들지 않는다.
+`payments`는 0015 마이그레이션(2026-08-20)부터 `family_group_id`로 Family 결제도 기록하고,
+결제내역(`/api/billing/history` → `/mypage/billing`)도 이 컬럼까지 조회하도록 2026-08-20에
+확장됨. **환불 계산(`/api/billing/refund/calculate`)은 아직 개인 구독(`subscriptions`)만
+다룬다** — Family 환불 정책이 논의되지 않아 의도적으로 제외(§2 제외 목록 참고).
 
 ### `payments`
 | 컬럼 | 타입 | 설명 |
 |---|---|---|
 | id | uuid, PK | |
-| subscription_id | uuid, FK → subscriptions.id | |
+| subscription_id | uuid, FK → subscriptions.id, nullable(0015) | 개인 구독 결제일 때만 채워짐 |
+| family_group_id | uuid, FK → family_groups.id, nullable(0015) | Family 결제일 때만 채워짐 |
 | amount | integer | 원화, 소수점 없음 |
 | status | text | `success` \| `failed` \| `refunded` |
 | pg_transaction_id | text | 포트원 거래 ID |
 | paid_at | timestamptz | |
+
+**제약(0015)**: `subscription_id`와 `family_group_id`는 배타적 — 정확히 하나만 채워져야 한다
+(`payments_subscription_or_family_group` check 제약). `activateFamilyGroup()`이 이제
+`activateSubscription()`과 동일하게 `pg_transaction_id`로 멱등성을 확인한 뒤 payments row를
+남긴다.
 
 **보존 원칙(§4.5)**: `deleted_at`이 찍힌 사용자의 `payments` 레코드는 삭제하지 않고 그대로 둡니다 — 전자상거래법상 거래 기록 보존 의무(예: 5년) 때문입니다. `profiles`가 소프트 삭제되어도 `payments`는 `subscription_id`를 통해 계속 조회 가능해야 합니다.
 
