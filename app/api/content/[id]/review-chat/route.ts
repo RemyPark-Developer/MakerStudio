@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthedUser } from "@/lib/supabase/auth-context";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { withErrorHandling } from "@/lib/api-error-handler";
+import { checkReviewChatUsage } from "@/lib/rate-limit-db";
 
 export const GET = withErrorHandling(async (req: NextRequest, ctx: { params: Promise<{ id: string }> }) => {
   const user = await getAuthedUser(req);
@@ -37,6 +38,14 @@ export const POST = withErrorHandling(async (req: NextRequest, ctx: { params: Pr
 
   if (!question) {
     return NextResponse.json({ error: "invalid_request", message: "question이 필요해요." }, { status: 400 });
+  }
+
+  const rl = await checkReviewChatUsage(user.id);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "rate_limited", message: "오늘의 검수 AI 질문 횟수(50회)를 다 썼어요. 내일 다시 시도해주세요." },
+      { status: 429 }
+    );
   }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -128,7 +137,7 @@ ${module.code}
       { module_id: id, admin_id: user.id, role: "assistant", content: answer },
     ]);
 
-    return NextResponse.json({ answer });
+    return NextResponse.json({ answer, remaining: rl.remaining });
   } catch (err) {
     console.error("Review chat error:", err);
     return NextResponse.json({ error: "network_error", message: "AI 연결에 문제가 있어요." }, { status: 502 });
