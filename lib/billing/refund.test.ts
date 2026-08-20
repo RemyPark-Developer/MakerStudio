@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { calculateProratedRefund } from "./refund";
+import { calculateProratedRefund, isWithinFullRefundWindow } from "./refund";
 
 test("프로토타입 데모에서 검증했던 정확한 사례: ₩9,900 × 29/31 = ₩9,261", () => {
   // 31일짜리 주기, 2일 사용(29일 남음)
@@ -72,4 +72,28 @@ test("음수 금액은 에러를 던진다", () => {
   assert.throws(() =>
     calculateProratedRefund({ monthlyAmount: -100, periodStart, periodEnd, now: periodStart })
   );
+});
+
+test("isWithinFullRefundWindow — 결제 직후는 7일 이내다", () => {
+  const periodStart = new Date("2026-08-01T00:00:00+09:00");
+  const now = new Date("2026-08-01T00:00:01+09:00");
+  assert.equal(isWithinFullRefundWindow(periodStart, now), true);
+});
+
+test("isWithinFullRefundWindow — 정확히 7일째는 경계값이라 포함된다", () => {
+  const periodStart = new Date("2026-08-01T00:00:00+09:00");
+  const now = new Date("2026-08-08T00:00:00+09:00"); // 정확히 7일 뒤
+  assert.equal(isWithinFullRefundWindow(periodStart, now), true);
+});
+
+test("isWithinFullRefundWindow — 7일을 1분이라도 넘으면 false", () => {
+  const periodStart = new Date("2026-08-01T00:00:00+09:00");
+  const now = new Date("2026-08-08T00:01:00+09:00");
+  assert.equal(isWithinFullRefundWindow(periodStart, now), false);
+});
+
+test("isWithinFullRefundWindow — now가 periodStart보다 이전이면(비정상 입력) false", () => {
+  const periodStart = new Date("2026-08-08T00:00:00+09:00");
+  const now = new Date("2026-08-01T00:00:00+09:00");
+  assert.equal(isWithinFullRefundWindow(periodStart, now), false);
 });

@@ -42,3 +42,14 @@ export function calculateProratedRefund(input: RefundCalcInput): RefundCalcResul
 
   return { refundAmount, usedDays, totalDays, remainingDays };
 }
+
+/**
+ * 결제 시작일(periodStart)로부터 windowDays(기본 7일) 이내인지 — Family 요금제
+ * "미사용 전액환불" 조건의 절반(나머지 절반은 이용 내역 확인, lib/billing/familyUsage.ts).
+ * 2026-08-20 Family 환불 정책 확정으로 추가.
+ */
+export function isWithinFullRefundWindow(periodStart: Date, now: Date, windowDays = 7): boolean {
+  const msPerDay = 1000 * 60 * 60 * 24;
+  const elapsedDays = (now.getTime() - periodStart.getTime()) / msPerDay;
+  return elapsedDays >= 0 && elapsedDays <= windowDays;
+}

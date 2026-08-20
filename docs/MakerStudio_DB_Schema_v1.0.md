@@ -87,8 +87,17 @@ Family 요금제(₩19,900/월, 최대 3명) 구독 그룹. **`guardian_child_li
 **`subscriptions`와는 분리되어 있다** — Family 요금제는 `subscriptions` row를 만들지 않는다.
 `payments`는 0015 마이그레이션(2026-08-20)부터 `family_group_id`로 Family 결제도 기록하고,
 결제내역(`/api/billing/history` → `/mypage/billing`)도 이 컬럼까지 조회하도록 2026-08-20에
-확장됨. **환불 계산(`/api/billing/refund/calculate`)은 아직 개인 구독(`subscriptions`)만
-다룬다** — Family 환불 정책이 논의되지 않아 의도적으로 제외(§2 제외 목록 참고).
+확장됨.
+
+**환불 계산(2026-08-20 Family 정책 확정, `/api/billing/refund/calculate`)**: 요청 바디에
+`family:true`를 보내면 개별 자녀가 아니라 family_group 전체 단위로 계산한다(부분환불 없음).
+정책: 결제 후 7일 이내 + guardian 본인과 family_group 소속 자녀 **전원**이 그 결제 주기 동안
+`learning_progress`/`quiz_attempts`/`tutor_messages`/`progress`/`saved_codes` **5개 테이블
+전부**에 활동이 없으면 전액환불(`lib/billing/familyUsage.ts`의 `checkFamilyGroupUsedInPeriod()`),
+그 외엔 `calculateProratedRefund()`로 일할계산 — 개인 구독과 같은 함수를 그대로 재사용함.
+**⚠️ 회사 귀책(중복결제·시스템 오류) 전액환불은 이 API가 다루지 않는다** — `payments.status`에
+그런 사유를 나타낼 플래그 자체가 없고, 지금처럼 CS/관리자가 수동으로 처리하는 것으로 의도적
+결정(2026-08-20). 개인 구독 경로는 이번 확장에서 전혀 안 건드림.
 
 ### `payments`
 | 컬럼 | 타입 | 설명 |
