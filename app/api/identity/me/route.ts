@@ -41,6 +41,7 @@ export const GET = withErrorHandling(async (req: NextRequest) => {
 
   return NextResponse.json({
     needsNickname: false,
+    id: authData.user.id,
     email: authData.user.email ?? null,
     ...profile,
     childId,

@@ -7,6 +7,8 @@ import { authedFetch } from "@/lib/client-auth";
 type Plan = { id: string; name: string; price: number; interval: string | null };
 type Payment = { id: string; subscription_id: string; amount: number; status: string; paid_at: string };
 type Me = { role: string; childId: string | null; needsNickname: boolean };
+type FamilyChild = { childId: string; nickname: string };
+type FamilyGroup = { status: string; seatLimit: number; currentPeriodEnd: string } | null;
 
 export default function BillingPage() {
   const [me, setMe] = useState<Me | null>(null);
@@ -16,6 +18,68 @@ export default function BillingPage() {
   const [forbidden, setForbidden] = useState(false);
   const [cancelMsg, setCancelMsg] = useState<string | null>(null);
   const [canceling, setCanceling] = useState(false);
+
+  const [familyGroup, setFamilyGroup] = useState<FamilyGroup>(null);
+  const [familyMembers, setFamilyMembers] = useState<FamilyChild[] | null>(null);
+  const [eligibleChildren, setEligibleChildren] = useState<FamilyChild[] | null>(null);
+  const [familyMsg, setFamilyMsg] = useState<string | null>(null);
+  const [familyBusy, setFamilyBusy] = useState(false);
+
+  function loadFamily() {
+    authedFetch("/api/billing/family/members")
+      .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
+      .then((data) => {
+        setFamilyGroup(data.familyGroup ?? null);
+        setFamilyMembers(data.members ?? []);
+        setEligibleChildren(data.eligibleChildren ?? []);
+      })
+      .catch(() => {
+        setFamilyGroup(null);
+        setFamilyMembers([]);
+        setEligibleChildren([]);
+      });
+  }
+
+  async function handleAddFamilyMember(childId: string) {
+    setFamilyBusy(true);
+    setFamilyMsg(null);
+    try {
+      const res = await authedFetch("/api/billing/family/members", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ childId }),
+      });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) {
+        setFamilyMsg(body?.message ?? "추가에 실패했어요.");
+        return;
+      }
+      loadFamily();
+    } catch {
+      setFamilyMsg("네트워크 오류로 처리하지 못했어요.");
+    } finally {
+      setFamilyBusy(false);
+    }
+  }
+
+  async function handleRemoveFamilyMember(childId: string) {
+    if (!confirm("이 아이를 가족 그룹에서 제거할까요? (보호자-자녀 등록 자체는 그대로 유지돼요)")) return;
+    setFamilyBusy(true);
+    setFamilyMsg(null);
+    try {
+      const res = await authedFetch(`/api/billing/family/members/${childId}`, { method: "DELETE" });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) {
+        setFamilyMsg(body?.message ?? "제거에 실패했어요.");
+        return;
+      }
+      loadFamily();
+    } catch {
+      setFamilyMsg("네트워크 오류로 처리하지 못했어요.");
+    } finally {
+      setFamilyBusy(false);
+    }
+  }
 
   useEffect(() => {
     if (!localStorage.getItem("ms_access_token")) {
@@ -31,6 +95,7 @@ export default function BillingPage() {
           setForbidden(true);
           return;
         }
+        loadFamily();
         return authedFetch("/api/billing/history")
           .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
           .then((data) => setPayments(data.payments ?? []));
@@ -144,6 +209,73 @@ export default function BillingPage() {
           {canceling ? "처리 중..." : "구독 해지하기"}
         </button>
         {cancelMsg && <p className="muted" style={{ marginTop: 10 }}>{cancelMsg}</p>}
+      </div>
+
+      <div className="card">
+        <div className="tab">Family 요금제</div>
+        {familyGroup === null ? (
+          <>
+            <h2>가족과 함께 이용해보세요</h2>
+            <p className="muted" style={{ marginBottom: 12 }}>
+              최대 3명의 자녀 계정이 함께 Premium을 이용할 수 있어요 (₩19,900/월).
+            </p>
+            <Link href="/checkout?plan=family" className="btn btnCoral fullBtn">
+              Family 요금제 시작하기
+            </Link>
+          </>
+        ) : (
+          <>
+            <h2>내 가족 그룹 ({familyMembers?.length ?? 0}/{familyGroup.seatLimit}명)</h2>
+            <p className="muted" style={{ marginBottom: 12 }}>
+              {new Date(familyGroup.currentPeriodEnd).toLocaleDateString("ko-KR")}까지 이용 가능해요.
+            </p>
+
+            <h3 style={{ fontSize: 13.5, margin: "12px 0 6px" }}>현재 멤버</h3>
+            {familyMembers === null ? (
+              <p className="muted">불러오는 중...</p>
+            ) : familyMembers.length === 0 ? (
+              <p className="muted">아직 추가된 자녀가 없어요.</p>
+            ) : (
+              familyMembers.map((c) => (
+                <div key={c.childId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid var(--grid-line)" }}>
+                  <span>{c.nickname}</span>
+                  <button
+                    onClick={() => handleRemoveFamilyMember(c.childId)}
+                    disabled={familyBusy}
+                    className="btn btnOutline"
+                    style={{ padding: "4px 10px", fontSize: 12.5 }}
+                  >
+                    제거
+                  </button>
+                </div>
+              ))
+            )}
+
+            <h3 style={{ fontSize: 13.5, margin: "16px 0 6px" }}>추가 가능한 자녀</h3>
+            {eligibleChildren === null ? (
+              <p className="muted">불러오는 중...</p>
+            ) : eligibleChildren.length === 0 ? (
+              <p className="muted">
+                추가할 수 있는 자녀가 없어요. 보호자 인증을 마친 자녀만 가족 그룹에 추가할 수 있어요.
+              </p>
+            ) : (
+              eligibleChildren.map((c) => (
+                <div key={c.childId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid var(--grid-line)" }}>
+                  <span>{c.nickname}</span>
+                  <button
+                    onClick={() => handleAddFamilyMember(c.childId)}
+                    disabled={familyBusy || (familyMembers?.length ?? 0) >= familyGroup.seatLimit}
+                    className="btn btnCoral"
+                    style={{ padding: "4px 10px", fontSize: 12.5 }}
+                  >
+                    추가
+                  </button>
+                </div>
+              ))
+            )}
+          </>
+        )}
+        {familyMsg && <p className="muted" style={{ marginTop: 10 }}>{familyMsg}</p>}
       </div>
     </main>
   );

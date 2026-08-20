@@ -3,6 +3,7 @@ import { getAuthedUser, requireGuardian } from "@/lib/supabase/auth-context";
 import { verifyPayment } from "@/lib/billing/portone";
 import { getPlanPrice } from "@/lib/billing/plans";
 import { activateSubscription } from "@/lib/billing/activateSubscription";
+import { activateFamilyGroup } from "@/lib/billing/activateFamilyGroup";
 import { withErrorHandling } from "@/lib/api-error-handler";
 
 /**
@@ -26,10 +27,11 @@ export const POST = withErrorHandling(async (req: NextRequest) => {
   const paymentId: string | undefined = body?.paymentId;
   const childId: string | undefined = body?.childId;
   const planId: string | undefined = body?.planId;
+  const isFamily = planId === "family";
 
-  if (!paymentId || !childId || !planId) {
+  if (!paymentId || !planId || (!isFamily && !childId)) {
     return NextResponse.json(
-      { error: "invalid_request", message: "paymentId, childId, planId가 필요해요." },
+      { error: "invalid_request", message: "paymentId, planId가 필요해요 (개인 요금제는 childId도 필요)." },
       { status: 400 }
     );
   }
@@ -60,13 +62,15 @@ export const POST = withErrorHandling(async (req: NextRequest) => {
     );
   }
 
-  const result = await activateSubscription({
-    guardianId: user.id,
-    childId,
-    planId,
-    paymentId,
-    amount: verified.amount,
-  });
+  const result = isFamily
+    ? await activateFamilyGroup({ ownerId: user.id, paymentId, amount: verified.amount })
+    : await activateSubscription({
+        guardianId: user.id,
+        childId: childId!,
+        planId,
+        paymentId,
+        amount: verified.amount,
+      });
 
   if (!result.ok) {
     console.error("구독 활성화 실패:", result.reason);

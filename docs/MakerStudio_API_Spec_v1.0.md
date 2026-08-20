@@ -45,7 +45,10 @@
 
 | Method | Path | 인증 | 설명 |
 |---|---|---|---|
-| GET | `/api/billing/plans` | ✕ | 요금제 목록 (MVP: Free, Premium 개인만 — 가족/B2B는 Won't) |
+| GET | `/api/billing/plans` | ✕ | 요금제 목록 (Free, Premium 개인, Family 최대 3명 — B2B는 Won't) |
+| GET | `/api/billing/family/members` | ✓ (guardian) | 내 family_group 상태 + 현재 멤버 + `guardian_child_links` 기준 추가 가능한 자녀 목록 |
+| POST | `/api/billing/family/members` | ✓ (guardian) | `{childId}` → family_group에 추가. 서버가 `guardian_child_links`로 법적 관계를 먼저 검증(`lib/billing/familyMembership.ts`) |
+| DELETE | `/api/billing/family/members/:childId` | ✓ (guardian) | family_group 멤버십만 제거 (`guardian_child_links`는 유지) |
 | POST | `/api/billing/checkout` | ✓ (guardian) | `{planId, paymentMethod}` → 포트원 결제창 세션 생성. **학생(role=student_child) 토큰으로 호출 시 무조건 `403`** (§3.2 "학생 화면엔 결제 버튼 없음" 원칙을 서버에서도 강제) |
 | POST | `/api/billing/webhook/portone` | ✕ (포트원 서명 검증으로 대체) | PG사 웹훅 수신. 결제 성공/실패에 따라 구독 상태 갱신 + `notifications` 도메인에 이벤트 발행 |
 | POST | `/api/billing/subscription/cancel` | ✓ (guardian) | 즉시 해지 예약, 현재 결제주기 종료일까지는 유지(§4.3) |

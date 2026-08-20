@@ -51,10 +51,33 @@ async function hasPremiumAccess(user: AuthedUser | null): Promise<boolean> {
       .gte("current_period_end", new Date().toISOString())
       .maybeSingle();
 
-    if (error || !data) return false;
-    return true;
+    if (!error && data) return true;
   } catch {
-    // Supabase 미연결 등 어떤 이유로든 확인이 안 되면 무조건 잠금.
+    // Supabase 미연결 등 어떤 이유로든 확인이 안 되면 이 경로는 실패로 취급하고 아래로 진행.
+  }
+
+  // 개인 구독이 없으면, 이 아이가 속한 family_group의 owner가 Family 요금제를
+  // 활성 상태로 유지 중인지 확인한다 (2026-08-20, family_groups §요금제 확장).
+  return hasFamilyPlanAccess(user.id);
+}
+
+async function hasFamilyPlanAccess(childId: string): Promise<boolean> {
+  try {
+    const supabase = getSupabaseServerClient();
+    const { data, error } = await supabase
+      .from("family_group_members")
+      .select("family_groups(status, current_period_end)")
+      .eq("child_id", childId)
+      .maybeSingle();
+
+    if (error || !data) return false;
+
+    const group = Array.isArray(data.family_groups) ? data.family_groups[0] : data.family_groups;
+    if (!group) return false;
+
+    return group.status === "active" && group.current_period_end >= new Date().toISOString();
+  } catch {
+    // ⚠️ 확인 안 되면 무조건 잠금 — hasPremiumAccess와 같은 원칙.
     return false;
   }
 }

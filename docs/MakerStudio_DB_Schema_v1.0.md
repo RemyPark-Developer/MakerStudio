@@ -58,11 +58,25 @@ Supabase는 이메일·비밀번호·소셜 로그인을 처리하는 `auth.user
 | id | uuid, PK | |
 | guardian_id | uuid, FK → profiles.id | 결제 주체 — 반드시 role=guardian만 (§3.2 서버 검증 필수) |
 | child_id | uuid, FK → profiles.id | 혜택을 받는 자녀 계정 |
-| plan | text | `free` \| `premium` (MVP는 이 2개만, 가족/B2B는 Won't) |
+| plan | text | `free` \| `premium` (개인 요금제만. Family는 아래 `family_groups` 별도 테이블) |
 | status | text | `active` \| `canceled` \| `past_due` |
 | current_period_start | timestamptz | |
 | current_period_end | timestamptz | 해지해도 이 시점까지 유지(§4.3) |
 | canceled_at | timestamptz, nullable | |
+
+### `family_groups` / `family_group_members` (2026-08-20 추가, MVP_Scope v1.3)
+Family 요금제(₩19,900/월, 최대 3명) 구독 그룹. **`guardian_child_links`(§1)와는 별개의 개념**이다 —
+`guardian_child_links`는 법적 보호자 관계, 이 두 테이블은 "요금제를 같이 쓰는 그룹" 멤버십이다.
+아이를 `family_group_members`에 넣으려면 서버가 먼저 `guardian_child_links`로 법적 관계를 확인해야
+한다(`app/api/billing/family/members/route.ts`, `lib/billing/familyMembership.ts`의 `checkCanAddFamilyMember`).
+
+| 테이블 | 컬럼 | 설명 |
+|---|---|---|
+| `family_groups` | id, owner_id(FK→profiles.id, unique), plan_tier, seat_limit(=3 고정), status(`active`\|`canceled`), current_period_start/end, canceled_at, created_at, updated_at | 보호자당 1개. `owner_id` unique라서 결제 검증(verify)과 웹훅이 같은 결제를 중복 처리해도 자연히 멱등적 |
+| `family_group_members` | family_group_id(FK), child_id(FK→profiles.id, unique), added_at | 한 아이는 동시에 하나의 family_group에만 속함 |
+
+**⚠️ `payments`/`subscriptions` 테이블과 분리되어 있다** — Family 결제는 이 두 테이블에 별도로
+기록되고, 기존 `payments`(결제내역 화면)·환불 계산 로직에는 아직 반영되지 않는다(§2 제외 목록 참고).
 
 ### `payments`
 | 컬럼 | 타입 | 설명 |

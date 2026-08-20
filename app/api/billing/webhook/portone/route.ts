@@ -3,6 +3,7 @@ import { Webhook } from "@portone/server-sdk";
 import { verifyPayment } from "@/lib/billing/portone";
 import { getPlanPrice } from "@/lib/billing/plans";
 import { activateSubscription } from "@/lib/billing/activateSubscription";
+import { activateFamilyGroup } from "@/lib/billing/activateFamilyGroup";
 
 /**
  * 포트원이 결제 완료/실패/취소 시 비동기로 호출하는 웹훅.
@@ -56,8 +57,13 @@ export async function POST(req: NextRequest) {
         ? JSON.parse(verified.customData)
         : (verified.customData as { guardianId?: string; childId?: string; planId?: string } | null);
 
-    if (!customData?.guardianId || !customData?.childId || !customData?.planId) {
-      console.error("웹훅: customData 누락으로 어느 구독인지 알 수 없음", { paymentId });
+    const isFamily = customData?.planId === "family";
+
+    // ⚠️ guardianId가 checkout/page.tsx에서 빠져있던 버그를 2026-08-20에 고쳤다 — 그 전까지는
+    // 이 조건이 개인 구독에 대해서도 항상 참이라 웹훅이 매번 조용히 스킵됐다(fail-closed 원칙 위반,
+    // verify/route.ts가 살아있어서 겉으로는 문제없어 보였을 뿐).
+    if (!customData?.guardianId || !customData?.planId || (!isFamily && !customData?.childId)) {
+      console.error("웹훅: customData 누락으로 어느 구독인지 알 수 없음", { paymentId, customData });
       return NextResponse.json({ received: true });
     }
 
@@ -67,13 +73,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ received: true });
     }
 
-    const result = await activateSubscription({
-      guardianId: customData.guardianId,
-      childId: customData.childId,
-      planId: customData.planId,
-      paymentId,
-      amount: verified.amount,
-    });
+    const result = isFamily
+      ? await activateFamilyGroup({ ownerId: customData.guardianId, paymentId, amount: verified.amount })
+      : await activateSubscription({
+          guardianId: customData.guardianId,
+          childId: customData.childId!,
+          planId: customData.planId,
+          paymentId,
+          amount: verified.amount,
+        });
 
     if (!result.ok) {
       console.error("웹훅: 구독 활성화 실패", result.reason);
