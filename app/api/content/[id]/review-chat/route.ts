@@ -36,8 +36,11 @@ export const POST = withErrorHandling(async (req: NextRequest, ctx: { params: Pr
   const body = await req.json().catch(() => null);
   const question: string | undefined = body?.question;
 
-  if (!question) {
+  if (!question || typeof question !== "string") {
     return NextResponse.json({ error: "invalid_request", message: "question이 필요해요." }, { status: 400 });
+  }
+  if (question.length > 500) {
+    return NextResponse.json({ error: "invalid_request", message: "질문은 500자 이내로 입력해주세요." }, { status: 400 });
   }
 
   const rl = await checkReviewChatUsage(user.id);

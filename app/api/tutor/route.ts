@@ -43,6 +43,9 @@ export const POST = withErrorHandling(async (req: NextRequest) => {
   if (!question || typeof question !== "string") {
     return NextResponse.json({ error: "bad_request", message: "질문(question)이 필요해요." }, { status: 400 });
   }
+  if (question.length > 500) {
+    return NextResponse.json({ error: "bad_request", message: "질문은 500자 이내로 입력해주세요." }, { status: 400 });
+  }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
