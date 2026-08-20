@@ -1,4 +1,5 @@
 import { getSupabaseServerClient } from "../supabase/server";
+import { notifyGuardian } from "../notifications/notify";
 
 export type ActivateSubscriptionInput = {
   guardianId: string;
@@ -65,6 +66,16 @@ export async function activateSubscription(input: ActivateSubscriptionInput): Pr
 
   if (payError) {
     return { ok: false, reason: `결제 기록 저장 실패: ${payError.message}` };
+  }
+
+  const notifyResult = await notifyGuardian({
+    guardianId: input.guardianId,
+    type: "payment_success",
+    message: `${input.planId === "premium" ? "Premium" : input.planId} 구독 결제(₩${input.amount.toLocaleString()})가 완료됐어요.`,
+    actionUrl: "/mypage/billing",
+  });
+  if (!notifyResult.ok) {
+    console.error("결제 성공 알림 실패:", notifyResult.reason);
   }
 
   return { ok: true, alreadyProcessed: false };

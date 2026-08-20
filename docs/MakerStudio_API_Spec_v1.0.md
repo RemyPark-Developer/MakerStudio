@@ -90,14 +90,26 @@ MVP 범위(§ MVP문서 3항목표: "관리자 검수 — Should, 비-UI 가능"
 
 ---
 
-## 7. `notifications` 도메인
+## 7. `notifications` 도메인 (2026-08-20 구현)
 
 | Method | Path | 인증 | 설명 |
 |---|---|---|---|
-| GET | `/api/notifications` | ✓ | 내 알림 목록. MVP는 결제 실패 알림이 Must, 나머지 유형은 Could |
-| PATCH | `/api/notifications/:id/read` | ✓ | 읽음 처리 |
+| GET | `/api/notifications` | ✓ | 내 알림 목록 |
+| PATCH | `/api/notifications/:id/read` | ✓ | 읽음 처리 (본인 알림만) |
 
-내부적으로 다른 도메인(`billing` 등)이 이벤트를 발행하면 이 도메인이 구독해서 알림 레코드를 생성합니다(§5.5 이벤트 패턴). 예: `billing.payment_failed` → `notifications`가 구독 → 알림 생성.
+내부적으로 다른 도메인(billing/family)이 `lib/notifications/notify.ts`의 `notifyGuardian()`을 직접
+호출하면 이 도메인이 `notifications` row를 만들고 이메일(Resend)로도 발송을 시도합니다. 이 저장소엔
+실제 이벤트 버스가 없어서(§5.5가 허용하는 대로) 지금은 순수 함수 호출로 연결돼 있습니다 — 나중에
+큐/이벤트 인프라가 생기면 `notifyGuardian()` 내부만 바꾸면 되도록 설계함.
+
+**실제 연결된 트리거**: 결제 성공(`payment_success`), 결제 활성화 실패(`payment_activation_failed`),
+결제 실패(`payment_failed`, `webhook/portone`의 `Transaction.Failed` 처리), 구독 해지
+(`subscription_canceled`), Family 멤버 추가/제거(`family_member_added`/`family_member_removed`).
+전부 guardian에게만 간다(아동 계정은 수신자가 되지 않음). 채널은 지금 전부 email — guardian
+연락처(휴대폰)가 DB에 없어서 SMS는 보류(DB_Schema.md §5 참고).
+
+**아직 없음**: 구독 만료 임박 알림(cron 인프라 필요), 콘텐츠 검수 알림(실질적 수신자 없음), 알림
+on/off 설정 API, 인앱 알림함 UI 페이지.
 
 ---
 

@@ -167,18 +167,36 @@ Family 요금제(₩19,900/월, 최대 3명) 구독 그룹. **`guardian_child_li
 
 ---
 
-## 5. `notifications` 도메인
+## 5. `notifications` 도메인 (2026-08-20 실제 구현, 0016_notification_delivery.sql)
+
+`notifications` 테이블 자체는 `0001_init.sql`부터 있었지만 실제로 insert하는 코드가 없어 계속
+비어있었다. 2026-08-20에 `lib/notifications/notify.ts`의 `notifyGuardian()`을 billing/family
+도메인이 직접 호출하는 방식(이벤트 버스 없음, 함수 호출로 결합 — §5.5)으로 실제 연결함.
 
 ### `notifications`
 | 컬럼 | 타입 | 설명 |
 |---|---|---|
 | id | uuid, PK | |
-| user_id | uuid, FK → profiles.id | |
-| type | text | `payment_failed` 등 (MVP는 결제실패만 Must) |
+| user_id | uuid, FK → profiles.id | 항상 guardian — 아동 계정에는 직접 알림을 보내지 않는다(§3.2와 같은 맥락) |
+| type | text | `payment_success` \| `payment_activation_failed` \| `payment_failed` \| `subscription_canceled` \| `family_member_added` \| `family_member_removed` (check 제약 없음, 자유 텍스트) |
 | message | text | |
 | action_url | text, nullable | |
 | read_at | timestamptz, nullable | |
 | created_at | timestamptz | |
+| channel | text, `'email'`\|`'sms'`, default `'email'` (0016) | 지금은 전부 `email` — guardian 휴대폰번호가 DB 어디에도 영구 저장 안 돼서 SMS는 보류 |
+| delivery_status | text, `'pending'`\|`'sent'`\|`'failed'`, default `'pending'` (0016) | 이메일 발송 실패해도 이 row(인앱 알림)와 그걸 유발한 도메인 액션(예: 결제 활성화)은 그대로 유지됨 |
+| delivered_at | timestamptz, nullable (0016) | |
+
+**트리거 지점**: `activateSubscription()`/`activateFamilyGroup()`(결제 성공, `alreadyProcessed`
+아닐 때만), `webhook/portone/route.ts`(결제 활성화 실패, `Transaction.Failed` 웹훅), `subscription/cancel`,
+`family/members` POST/DELETE. 결제 실패(`payment_failed`)는 웹훅이 `Transaction.Paid` 외 타입을
+전부 버리던 걸 이번에 `Transaction.Failed`도 처리하도록 확장해서 연결함.
+
+**API**: `GET /api/notifications`, `PATCH /api/notifications/:id/read` — §7 참고. 인앱 알림함 UI
+페이지는 이번 범위에서 제외(라우트만 존재).
+
+**제외한 것**: SMS 채널, 구독 만료 임박 알림(cron 인프라 없음), 콘텐츠 검수 승인/반려 알림(현재
+submitter가 항상 admin이라 실질적 수신자 없음), 알림 on/off 설정 화면.
 
 ---
 

@@ -1,4 +1,5 @@
 import { getSupabaseServerClient } from "../supabase/server";
+import { notifyGuardian } from "../notifications/notify";
 
 export type ActivateFamilyGroupInput = {
   ownerId: string;
@@ -66,6 +67,16 @@ export async function activateFamilyGroup(input: ActivateFamilyGroupInput): Prom
 
   if (payError) {
     return { ok: false, reason: `결제 기록 저장 실패: ${payError.message}` };
+  }
+
+  const notifyResult = await notifyGuardian({
+    guardianId: input.ownerId,
+    type: "payment_success",
+    message: `Family 요금제 결제(₩${input.amount.toLocaleString()})가 완료됐어요.`,
+    actionUrl: "/mypage/billing",
+  });
+  if (!notifyResult.ok) {
+    console.error("Family 결제 성공 알림 실패:", notifyResult.reason);
   }
 
   return { ok: true, alreadyProcessed: false };

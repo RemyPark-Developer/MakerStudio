@@ -47,3 +47,27 @@ export async function sendVerificationEmail(to: string, confirmUrl: string): Pro
     throw new Error(`이메일 발송 실패: ${JSON.stringify(error)}`);
   }
 }
+
+/** notifications 도메인(lib/notifications/notify.ts)이 사용하는 범용 알림 메일. */
+export async function sendNotificationEmail(to: string, subject: string, bodyHtml: string): Promise<void> {
+  const from = process.env.RESEND_FROM_EMAIL;
+  if (!from) {
+    throw new Error("RESEND_FROM_EMAIL이 설정되지 않았어요. Resend에 등록한 발신 도메인 주소를 넣어주세요.");
+  }
+
+  const client = getClient();
+  const { error } = await client.emails.send({
+    from,
+    to,
+    subject: `[MakerStudio] ${subject}`,
+    html: `
+      <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:20px">
+        ${bodyHtml}
+      </div>
+    `,
+  });
+
+  if (error) {
+    throw new Error(`이메일 발송 실패: ${JSON.stringify(error)}`);
+  }
+}

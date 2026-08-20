@@ -3,6 +3,7 @@ import { getAuthedUser, requireGuardian } from "@/lib/supabase/auth-context";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { withErrorHandling } from "@/lib/api-error-handler";
 import { checkCanAddFamilyMember } from "@/lib/billing/familyMembership";
+import { notifyGuardian } from "@/lib/notifications/notify";
 
 /**
  * GET: 내 family_group 상태 + 현재 멤버 + (guardian_child_links 기준) 추가 가능한 자녀 목록.
@@ -112,6 +113,16 @@ export const POST = withErrorHandling(async (req: NextRequest) => {
 
   if (error) {
     return NextResponse.json({ error: "server_error", message: "추가에 실패했어요." }, { status: 500 });
+  }
+
+  const notifyResult = await notifyGuardian({
+    guardianId: user.id,
+    type: "family_member_added",
+    message: "Family 그룹에 아이가 추가됐어요.",
+    actionUrl: "/mypage/billing",
+  });
+  if (!notifyResult.ok) {
+    console.error("Family 멤버 추가 알림 실패:", notifyResult.reason);
   }
 
   return NextResponse.json({ ok: true });

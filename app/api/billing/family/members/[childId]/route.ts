@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthedUser, requireGuardian } from "@/lib/supabase/auth-context";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { withErrorHandling } from "@/lib/api-error-handler";
+import { notifyGuardian } from "@/lib/notifications/notify";
 
 /**
  * family_group 멤버십만 제거한다 — guardian_child_links(법적 보호자-자녀 관계)는 그대로 둔다.
@@ -34,6 +35,16 @@ export const DELETE = withErrorHandling(
 
     if (error) {
       return NextResponse.json({ error: "server_error", message: "제거에 실패했어요." }, { status: 500 });
+    }
+
+    const notifyResult = await notifyGuardian({
+      guardianId: user.id,
+      type: "family_member_removed",
+      message: "Family 그룹에서 아이가 제거됐어요.",
+      actionUrl: "/mypage/billing",
+    });
+    if (!notifyResult.ok) {
+      console.error("Family 멤버 제거 알림 실패:", notifyResult.reason);
     }
 
     return NextResponse.json({ ok: true });
