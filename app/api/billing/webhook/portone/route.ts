@@ -64,11 +64,21 @@ export async function POST(req: NextRequest) {
     }
 
     if (webhook.type === "Transaction.Failed") {
+      // ⚠️ 실패한 결제가 어떤 요금제였는지 쿼리 파라미터로 그대로 넘겨야 재시도 링크가
+      // 정확한 체크아웃 화면을 연다 — plan 파라미터가 없으면 checkout/page.tsx가
+      // "premium"으로 디폴트돼서, Family 결제 실패인데도 Premium 화면이 뜨는 버그가
+      // 있었다(2026-08-20 발견·수정). mypage/billing.tsx의 `/checkout?plan=family`와
+      // 같은 파라미터 이름(`plan`, `childId`)을 써야 한다.
+      const retryParams = new URLSearchParams();
+      if (customData.planId) retryParams.set("plan", customData.planId);
+      if (customData.childId) retryParams.set("childId", customData.childId);
+      const retryUrl = retryParams.toString() ? `/checkout?${retryParams.toString()}` : "/checkout";
+
       const notifyResult = await notifyGuardian({
         guardianId: customData.guardianId,
         type: "payment_failed",
         message: "결제가 실패했어요. 다시 시도해주세요.",
-        actionUrl: "/checkout",
+        actionUrl: retryUrl,
       });
       if (!notifyResult.ok) {
         console.error("결제 실패 알림 실패:", notifyResult.reason);

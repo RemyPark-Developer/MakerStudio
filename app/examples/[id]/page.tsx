@@ -100,7 +100,7 @@ export default function ExamplePage() {
             이용하실 수 있어요.
           </p>
           <Link
-            href={childId ? `/checkout?childId=${childId}&planId=premium` : "/mypage"}
+            href={childId ? `/checkout?childId=${childId}&plan=premium` : "/mypage"}
             className="btn btnCoral fullBtn"
           >
             Premium 구독하기
