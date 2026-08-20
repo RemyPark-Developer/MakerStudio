@@ -22,6 +22,7 @@ type GatedExample = {
   isPremium: boolean;
   locked: boolean;
   code?: string;
+  codeHtml?: string;
   codeFilename?: string;
   explain?: string;
 };
@@ -110,7 +111,11 @@ export default function ExamplePage() {
           <div className="card">
             <div className="tab">Q1 · 전체 코드</div>
             <h3>{data.codeFilename}</h3>
-            <div className="codebox">{data.code}</div>
+            {data.codeHtml ? (
+              <div className="codebox" dangerouslySetInnerHTML={{ __html: data.codeHtml }} />
+            ) : (
+              <div className="codebox">{data.code}</div>
+            )}
             {data.sourceExample && <div className="sourcebadge">소스: {data.sourceExample}</div>}
           </div>
 

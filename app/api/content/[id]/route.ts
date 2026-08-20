@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { codeToHtml } from "shiki";
 import { getAuthedUser } from "@/lib/supabase/auth-context";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { withErrorHandling } from "@/lib/api-error-handler";
@@ -25,5 +26,7 @@ export const GET = withErrorHandling(async (req: NextRequest, ctx: { params: Pro
     return NextResponse.json({ error: "not_found", message: "해당 콘텐츠를 찾을 수 없어요." }, { status: 404 });
   }
 
-  return NextResponse.json({ module: data });
+  const codeHtml = data.code ? await codeToHtml(data.code, { lang: "cpp", theme: "github-dark" }) : null;
+
+  return NextResponse.json({ module: { ...data, codeHtml } });
 });

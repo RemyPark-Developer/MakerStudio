@@ -77,6 +77,21 @@ a { color: var(--sage-dark); }
   white-space: pre;
 }
 
+/* shiki가 생성한 <pre class="shiki">는 자체 배경/여백을 갖고 있어서
+   .codebox 안에 중첩되면 이중 박스처럼 보인다. 폰트/줄바꿈/스크롤은
+   .codebox 쪽 값을 그대로 쓰고, 토큰 색상만 shiki 결과(github-dark)를 쓴다. */
+.codebox pre.shiki,
+.codebox-wrap pre.shiki {
+  margin: 0;
+  padding: 0;
+  background: transparent !important;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  white-space: inherit;
+  overflow-x: visible;
+}
+
 .partlist { list-style: none; padding: 0; margin: 0; }
 .partlist li {
   padding: 6px 0;

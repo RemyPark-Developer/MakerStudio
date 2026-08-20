@@ -26,6 +26,7 @@ type ContentModule = {
   parts: string[];
   circuit: any;
   code: string;
+  codeHtml: string | null;
   explain_ko: string;
   mission_ko: string;
   quiz: any;
@@ -184,19 +185,35 @@ export default function ContentReviewDetailPage() {
 
       <div className="card">
         <div className="tab">전체 코드</div>
-        <pre
-          style={{
-            background: "#152420",
-            color: "#dff0e6",
-            padding: 12,
-            borderRadius: 8,
-            fontSize: 12.5,
-            overflowX: "auto",
-            whiteSpace: "pre-wrap",
-          }}
-        >
-          {module.code}
-        </pre>
+        {module.codeHtml ? (
+          <div
+            className="codebox-wrap"
+            style={{
+              background: "#152420",
+              color: "#dff0e6",
+              padding: 12,
+              borderRadius: 8,
+              fontSize: 12.5,
+              overflowX: "auto",
+              whiteSpace: "pre-wrap",
+            }}
+            dangerouslySetInnerHTML={{ __html: module.codeHtml }}
+          />
+        ) : (
+          <pre
+            style={{
+              background: "#152420",
+              color: "#dff0e6",
+              padding: 12,
+              borderRadius: 8,
+              fontSize: 12.5,
+              overflowX: "auto",
+              whiteSpace: "pre-wrap",
+            }}
+          >
+            {module.code}
+          </pre>
+        )}
       </div>
 
       <div className="card">
