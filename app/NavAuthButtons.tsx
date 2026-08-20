@@ -69,6 +69,9 @@ export function NavAuthButtons() {
             {me.nickname}님
           </span>
         )}
+        {me?.role === "admin" && (
+          <Link href="/admin/content-review" className="btn btnOutline">관리자</Link>
+        )}
         <Link href="/mypage" className="btn btnOutline">마이페이지</Link>
         <button onClick={handleLogout} className="btn btnCoral">로그아웃</button>
       </>
