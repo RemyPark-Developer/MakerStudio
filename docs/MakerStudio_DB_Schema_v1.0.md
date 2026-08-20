@@ -81,13 +81,31 @@ Family 요금제(₩19,900/월, 최대 3명) 구독 그룹. **`guardian_child_li
 
 | 테이블 | 컬럼 | 설명 |
 |---|---|---|
-| `family_groups` | id, owner_id(FK→profiles.id, unique), plan_tier, seat_limit(=3 고정), status(`active`\|`canceled`), current_period_start/end, canceled_at, created_at, updated_at | 보호자당 1개. `owner_id` unique라서 결제 검증(verify)과 웹훅이 같은 결제를 중복 처리해도 자연히 멱등적 |
+| `family_groups` | id, owner_id(FK→profiles.id, unique), plan_tier, seat_limit(기본 3, 좌석 추가로 최대 6 — 0021), status(`active`\|`canceled`), current_period_start/end, canceled_at, created_at, updated_at | 보호자당 1개. `owner_id` unique라서 결제 검증(verify)과 웹훅이 같은 결제를 중복 처리해도 자연히 멱등적 |
 | `family_group_members` | family_group_id(FK), child_id(FK→profiles.id, unique), added_at | 한 아이는 동시에 하나의 family_group에만 속함 |
 
 **`subscriptions`와는 분리되어 있다** — Family 요금제는 `subscriptions` row를 만들지 않는다.
 `payments`는 0015 마이그레이션(2026-08-20)부터 `family_group_id`로 Family 결제도 기록하고,
 결제내역(`/api/billing/history` → `/mypage/billing`)도 이 컬럼까지 조회하도록 2026-08-20에
 확장됨.
+
+**해지, 좌석 추가/축소(0021, 2026-08-20)**:
+- `POST /api/billing/family/cancel` 신규 — `subscription/cancel`과 동일한 패턴으로 `status`를
+  `canceled`로, `family_group_members`는 안 지움(같은 `owner_id`로 재결제하면 그대로 재활성화).
+- **접근 판단 버그 수정**: `lib/content/gate.ts`의 `hasPremiumAccess()`/`hasFamilyPlanAccess()`가
+  원래 `status === 'active'`까지 요구해서, 해지 즉시 접근이 끊기는(§4.3 "잔여기간 보장" 원칙
+  위반) 버그가 있었다. 이번에 `current_period_end`만으로 판단하도록 고쳐서 개인/Family 둘 다
+  올바르게 동작함.
+- **좌석 추가**: 신규 planId `family_extra_seat`(₩4,900/좌석, 2026-08-18 확정, 최대 6석까지)로
+  일회성 결제 → `lib/billing/activateFamilySeatAddon.ts`가 `seat_limit`만 올림
+  (`current_period_start/end`는 안 건드림). **이 프로젝트는 정기결제가 아니라 매번 브라우저가
+  여는 일회성 결제 구조라 "이번 결제 주기 동안만 유효"**하고, 다음 Family 재결제 때
+  `activateFamilyGroup()`이 `seat_limit`을 항상 3으로 upsert하면서 자동 리셋됨.
+- **좌석 축소(다운그레이드)**: 그 리셋 순간 멤버가 3명을 넘으면(좌석 추가로 4명이었던 경우)
+  `lib/billing/familySeatReconciliation.ts`의 `selectMembersToRemove()`(순수 함수, 가장 최근
+  추가된 아이부터 제거)로 대상을 정해 `activateFamilyGroup()`이 자동으로 정리하고 보호자에게
+  누가 제거됐는지 알림. Family→Premium/Free 같은 요금제 티어 전환은 범위 밖(개인 쪽에도 없는
+  별도 기능).
 
 **환불 계산(2026-08-20 Family 정책 확정, `/api/billing/refund/calculate`)**: 요청 바디에
 `family:true`를 보내면 개별 자녀가 아니라 family_group 전체 단위로 계산한다(부분환불 없음).

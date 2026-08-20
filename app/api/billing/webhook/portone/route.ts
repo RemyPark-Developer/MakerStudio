@@ -4,6 +4,7 @@ import { verifyPayment } from "@/lib/billing/portone";
 import { getPlanPrice } from "@/lib/billing/plans";
 import { activateSubscription } from "@/lib/billing/activateSubscription";
 import { activateFamilyGroup } from "@/lib/billing/activateFamilyGroup";
+import { activateFamilySeatAddon } from "@/lib/billing/activateFamilySeatAddon";
 import { notifyGuardian } from "@/lib/notifications/notify";
 
 /**
@@ -87,11 +88,12 @@ export async function POST(req: NextRequest) {
     }
 
     const isFamily = customData.planId === "family";
+    const isSeatAddon = customData.planId === "family_extra_seat";
 
     // ⚠️ guardianId가 checkout/page.tsx에서 빠져있던 버그를 2026-08-20에 고쳤다 — 그 전까지는
     // 이 조건이 개인 구독에 대해서도 항상 참이라 웹훅이 매번 조용히 스킵됐다(fail-closed 원칙 위반,
     // verify/route.ts가 살아있어서 겉으로는 문제없어 보였을 뿐).
-    if (!customData.planId || (!isFamily && !customData.childId)) {
+    if (!customData.planId || (!isFamily && !isSeatAddon && !customData.childId)) {
       console.error("웹훅: customData 누락으로 어느 구독인지 알 수 없음", { paymentId, customData });
       return NextResponse.json({ received: true });
     }
@@ -104,6 +106,8 @@ export async function POST(req: NextRequest) {
 
     const result = isFamily
       ? await activateFamilyGroup({ ownerId: customData.guardianId, paymentId, amount: verified.amount })
+      : isSeatAddon
+      ? await activateFamilySeatAddon({ guardianId: customData.guardianId, paymentId, amount: verified.amount })
       : await activateSubscription({
           guardianId: customData.guardianId,
           childId: customData.childId!,

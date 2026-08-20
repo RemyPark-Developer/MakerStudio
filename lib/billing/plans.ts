@@ -8,6 +8,9 @@ export const PLAN_PRICES: Record<string, number> = {
   free: 0,
   premium: 9900,
   family: 19900,
+  // Family 좌석 추가(4번째부터) 1좌석당 가격 — 2026-08-18 확정. 그 결제 주기 동안만
+  // 유효(activateFamilyGroup이 재결제마다 seat_limit을 3으로 리셋, 0021 참고).
+  family_extra_seat: 4900,
 };
 
 export function getPlanPrice(planId: string): number | null {

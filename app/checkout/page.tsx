@@ -19,6 +19,12 @@ const PLAN_COPY: Record<string, { orderName: string; title: string; description:
     description:
       "최대 3명의 자녀 계정이 함께 Premium을 이용할 수 있어요. 결제 후 마이페이지에서 자녀를 추가/제거할 수 있어요.",
   },
+  family_extra_seat: {
+    orderName: "MakerStudio Family 좌석 추가",
+    title: `Family 좌석 추가 — ₩${PLAN_PRICES.family_extra_seat.toLocaleString()}`,
+    description:
+      "이번 결제 주기 동안만 자녀 1명을 더 추가할 수 있어요. 다음 Family 재결제 때는 다시 3명으로 돌아가요.",
+  },
 };
 
 export default function CheckoutPage() {
@@ -34,6 +40,8 @@ function CheckoutPageInner() {
   const childId = searchParams.get("childId") ?? "";
   const planId = searchParams.get("plan") ?? "premium";
   const isFamily = planId === "family";
+  const isSeatAddon = planId === "family_extra_seat";
+  const noChildIdRequired = isFamily || isSeatAddon;
   const copy = PLAN_COPY[planId] ?? PLAN_COPY.premium;
   const price = PLAN_PRICES[planId] ?? PLAN_PRICES.premium;
 
@@ -43,8 +51,8 @@ function CheckoutPageInner() {
   const [phone, setPhone] = useState("");
 
   async function handlePay() {
-    // Family는 특정 자녀가 아니라 보호자 본인이 구독 주체라 childId가 필요 없다.
-    if (!isFamily && !childId) {
+    // Family/좌석 추가는 특정 자녀가 아니라 보호자 본인이 결제 주체라 childId가 필요 없다.
+    if (!noChildIdRequired && !childId) {
       setErrorMsg("어느 자녀 계정을 구독할지 정보가 없어요. 보호자 대시보드에서 다시 시도해주세요.");
       setStatus("error");
       return;
@@ -94,7 +102,7 @@ function CheckoutPageInner() {
         // customData에 실어 보낸다 (webhook/portone/route.ts에서 이 값을 읽음).
         // ⚠️ guardianId가 빠져있던 버그를 여기서 고쳤다(2026-08-20) — 이게 없으면 웹훅이
         // "진짜 최종 진실 공급원" 역할을 못 하고 조용히 스킵된다(fail-closed 원칙 위반).
-        customData: isFamily ? { guardianId: me.id, planId } : { guardianId: me.id, childId, planId },
+        customData: noChildIdRequired ? { guardianId: me.id, planId } : { guardianId: me.id, childId, planId },
       });
 
       if (response?.code !== undefined) {
@@ -108,7 +116,7 @@ function CheckoutPageInner() {
       const verifyRes = await authedFetch("/api/billing/checkout/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(isFamily ? { paymentId, planId } : { paymentId, childId, planId }),
+        body: JSON.stringify(noChildIdRequired ? { paymentId, planId } : { paymentId, childId, planId }),
       });
       const data = await verifyRes.json();
 
@@ -133,7 +141,7 @@ function CheckoutPageInner() {
         <div className="card center">
           <div className="tab">결제 완료</div>
           <p style={{ fontSize: 15, margin: "16px 0" }}>
-            🎉 {isFamily ? "Family" : "Premium"} 구독이 시작됐어요!
+            🎉 {isSeatAddon ? "Family 좌석이 추가됐어요!" : `${isFamily ? "Family" : "Premium"} 구독이 시작됐어요!`}
           </p>
           <Link href="/mypage/billing" className="btn btnCoral fullBtn">마이페이지로</Link>
         </div>
@@ -145,7 +153,7 @@ function CheckoutPageInner() {
     <main className="authWrap">
       <p><Link href="/mypage">← 마이페이지로</Link></p>
       <div className="card">
-        <div className="tab">{isFamily ? "Family 구독" : "Premium 구독"}</div>
+        <div className="tab">{isSeatAddon ? "Family 좌석 추가" : isFamily ? "Family 구독" : "Premium 구독"}</div>
         <h2>{copy.title}</h2>
         <p className="muted" style={{ fontSize: 13 }}>
           {copy.description}

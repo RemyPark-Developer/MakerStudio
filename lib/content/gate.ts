@@ -42,12 +42,16 @@ async function hasPremiumAccess(user: AuthedUser | null): Promise<boolean> {
 
   try {
     const supabase = getSupabaseServerClient();
+    // ⚠️ status='active'를 요구하지 않는다 — §4.3(해지해도 결제기간이 끝날 때까지는
+    // 계속 이용 가능) 원칙의 실제 구현. subscription/cancel이 해지 즉시 status를
+    // 'canceled'로 바꾸므로, 여기서 status까지 걸러버리면 "해지해도 잔여기간은
+    // 이용 가능"이라는 안내 문구와 실제 동작이 어긋난다(2026-08-20 발견·수정).
+    // 접근을 끊어야 하는 건 status가 아니라 current_period_end가 지났을 때뿐이다.
     const { data, error } = await supabase
       .from("subscriptions")
-      .select("status, plan, current_period_end")
+      .select("plan, current_period_end")
       .eq("child_id", user.id)
       .eq("plan", "premium")
-      .eq("status", "active")
       .gte("current_period_end", new Date().toISOString())
       .maybeSingle();
 
@@ -66,7 +70,7 @@ async function hasFamilyPlanAccess(childId: string): Promise<boolean> {
     const supabase = getSupabaseServerClient();
     const { data, error } = await supabase
       .from("family_group_members")
-      .select("family_groups(status, current_period_end)")
+      .select("family_groups(current_period_end)")
       .eq("child_id", childId)
       .maybeSingle();
 
@@ -75,7 +79,8 @@ async function hasFamilyPlanAccess(childId: string): Promise<boolean> {
     const group = Array.isArray(data.family_groups) ? data.family_groups[0] : data.family_groups;
     if (!group) return false;
 
-    return group.status === "active" && group.current_period_end >= new Date().toISOString();
+    // ⚠️ 위 hasPremiumAccess와 동일한 이유로 status는 안 본다 — 해지해도 잔여기간까지는 접근 유지.
+    return group.current_period_end >= new Date().toISOString();
   } catch {
     // ⚠️ 확인 안 되면 무조건 잠금 — hasPremiumAccess와 같은 원칙.
     return false;

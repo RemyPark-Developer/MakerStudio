@@ -9,7 +9,9 @@ export type NotificationType =
   | "subscription_canceled"
   | "family_member_added"
   | "family_member_removed"
-  | "child_chat_flagged";
+  | "child_chat_flagged"
+  | "family_seat_added"
+  | "family_seat_reduced";
 
 export type Channel = "email" | "sms";
 
@@ -31,6 +33,8 @@ export const CHANNELS_BY_TYPE: Record<NotificationType, Channel[]> = {
   family_member_added: ["email"],
   family_member_removed: ["email"],
   child_chat_flagged: ["email", "sms"],
+  family_seat_added: ["email"],
+  family_seat_reduced: ["email"],
 };
 
 const SUBJECT_BY_TYPE: Record<NotificationType, string> = {
@@ -41,6 +45,8 @@ const SUBJECT_BY_TYPE: Record<NotificationType, string> = {
   family_member_added: "Family 그룹에 아이가 추가됐어요",
   family_member_removed: "Family 그룹에서 아이가 제거됐어요",
   child_chat_flagged: "자녀의 AI 튜터 대화에서 확인이 필요한 내용이 있어요",
+  family_seat_added: "Family 좌석이 추가됐어요",
+  family_seat_reduced: "Family 좌석이 정리됐어요",
 };
 
 export type NotifyGuardianInput = {

@@ -1,5 +1,6 @@
 import { getSupabaseServerClient } from "../supabase/server";
 import { notifyGuardian } from "../notifications/notify";
+import { selectMembersToRemove } from "./familySeatReconciliation";
 
 export type ActivateFamilyGroupInput = {
   ownerId: string;
@@ -56,6 +57,41 @@ export async function activateFamilyGroup(input: ActivateFamilyGroupInput): Prom
 
   if (groupError || !group) {
     return { ok: false, reason: `family_groups 저장 실패: ${groupError?.message}` };
+  }
+
+  // ⚠️ 재결제 때마다 seat_limit이 3으로 리셋되므로(위 upsert), 좌석 추가로 4명 이상이던
+  // 상태라면 이 시점에 정리가 필요하다 — "좌석 추가는 그 결제 주기 동안만 유효"가 여기서
+  // 실제로 성립한다(2026-08-20 좌석 추가/다운그레이드 설계).
+  const { data: currentMembers } = await supabase
+    .from("family_group_members")
+    .select("child_id, added_at, profiles!family_group_members_child_id_fkey(nickname)")
+    .eq("family_group_id", group.id);
+
+  const membersToRemove = selectMembersToRemove(
+    (currentMembers ?? []).map((m: any) => ({ childId: m.child_id, addedAt: m.added_at })),
+    SEAT_LIMIT
+  );
+
+  if (membersToRemove.length > 0) {
+    await supabase
+      .from("family_group_members")
+      .delete()
+      .eq("family_group_id", group.id)
+      .in("child_id", membersToRemove);
+
+    const removedNicknames = (currentMembers ?? [])
+      .filter((m: any) => membersToRemove.includes(m.child_id))
+      .map((m: any) => (Array.isArray(m.profiles) ? m.profiles[0]?.nickname : m.profiles?.nickname) ?? "이름 없음");
+
+    const reduceNotifyResult = await notifyGuardian({
+      guardianId: input.ownerId,
+      type: "family_seat_reduced",
+      message: `Family 좌석이 ${SEAT_LIMIT}개로 정리되면서 ${removedNicknames.join(", ")} 계정이 Family 그룹에서 제거됐어요. 다시 추가하려면 좌석을 추가 구매해주세요.`,
+      actionUrl: "/mypage/billing",
+    });
+    if (!reduceNotifyResult.ok) {
+      console.error("좌석 축소 알림 실패:", reduceNotifyResult.reason);
+    }
   }
 
   const { error: payError } = await supabase.from("payments").insert({

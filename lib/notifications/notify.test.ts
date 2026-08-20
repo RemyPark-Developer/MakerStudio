@@ -26,6 +26,8 @@ test("email만 있는 타입은 채널이 정확히 1개다", () => {
     "subscription_canceled",
     "family_member_added",
     "family_member_removed",
+    "family_seat_added",
+    "family_seat_reduced",
   ];
   for (const type of emailOnlyTypes) {
     assert.deepEqual(CHANNELS_BY_TYPE[type], ["email"]);

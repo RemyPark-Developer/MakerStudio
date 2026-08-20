@@ -8,7 +8,7 @@ type Plan = { id: string; name: string; price: number; interval: string | null }
 type Payment = { id: string; subscription_id: string; amount: number; status: string; paid_at: string };
 type Me = { role: string; childId: string | null; needsNickname: boolean };
 type FamilyChild = { childId: string; nickname: string };
-type FamilyGroup = { status: string; seatLimit: number; currentPeriodEnd: string } | null;
+type FamilyGroup = { status: "active" | "canceled"; seatLimit: number; currentPeriodEnd: string } | null;
 
 export default function BillingPage() {
   const [me, setMe] = useState<Me | null>(null);
@@ -24,6 +24,8 @@ export default function BillingPage() {
   const [eligibleChildren, setEligibleChildren] = useState<FamilyChild[] | null>(null);
   const [familyMsg, setFamilyMsg] = useState<string | null>(null);
   const [familyBusy, setFamilyBusy] = useState(false);
+  const [familyCancelMsg, setFamilyCancelMsg] = useState<string | null>(null);
+  const [familyCanceling, setFamilyCanceling] = useState(false);
 
   function loadFamily() {
     authedFetch("/api/billing/family/members")
@@ -139,6 +141,30 @@ export default function BillingPage() {
     }
   }
 
+  async function handleCancelFamily() {
+    if (!confirm("정말 Family 구독을 해지하시겠어요? 현재 결제 기간이 끝날 때까지는 계속 이용하실 수 있어요.")) {
+      return;
+    }
+
+    setFamilyCanceling(true);
+    setFamilyCancelMsg(null);
+    try {
+      const res = await authedFetch("/api/billing/family/cancel", { method: "POST" });
+      const body = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        setFamilyCancelMsg(body?.message ?? "Family 해지에 실패했어요.");
+        return;
+      }
+      setFamilyCancelMsg(body?.message ?? "해지 처리됐어요.");
+      loadFamily();
+    } catch {
+      setFamilyCancelMsg("네트워크 오류로 처리하지 못했어요.");
+    } finally {
+      setFamilyCanceling(false);
+    }
+  }
+
   if (needsLogin) {
     return (
       <main className="wrap">
@@ -227,8 +253,21 @@ export default function BillingPage() {
           <>
             <h2>내 가족 그룹 ({familyMembers?.length ?? 0}/{familyGroup.seatLimit}명)</h2>
             <p className="muted" style={{ marginBottom: 12 }}>
+              {familyGroup.status === "canceled" ? "해지됨 · " : ""}
               {new Date(familyGroup.currentPeriodEnd).toLocaleDateString("ko-KR")}까지 이용 가능해요.
             </p>
+
+            {familyGroup.status === "active" && (
+              <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+                <Link href="/checkout?plan=family_extra_seat" className="btn btnOutline" style={{ fontSize: 12.5 }}>
+                  좌석 추가 구매 (₩4,900, 이번 주기만)
+                </Link>
+                <button onClick={handleCancelFamily} disabled={familyCanceling} className="btn btnOutline" style={{ fontSize: 12.5 }}>
+                  {familyCanceling ? "처리 중..." : "Family 해지"}
+                </button>
+              </div>
+            )}
+            {familyCancelMsg && <p className="muted" style={{ marginBottom: 12 }}>{familyCancelMsg}</p>}
 
             <h3 style={{ fontSize: 13.5, margin: "12px 0 6px" }}>현재 멤버</h3>
             {familyMembers === null ? (
@@ -264,7 +303,7 @@ export default function BillingPage() {
                   <span>{c.nickname}</span>
                   <button
                     onClick={() => handleAddFamilyMember(c.childId)}
-                    disabled={familyBusy || (familyMembers?.length ?? 0) >= familyGroup.seatLimit}
+                    disabled={familyBusy || familyGroup.status !== "active" || (familyMembers?.length ?? 0) >= familyGroup.seatLimit}
                     className="btn btnCoral"
                     style={{ padding: "4px 10px", fontSize: 12.5 }}
                   >

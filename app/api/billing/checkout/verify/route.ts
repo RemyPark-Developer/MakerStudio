@@ -4,6 +4,7 @@ import { verifyPayment } from "@/lib/billing/portone";
 import { getPlanPrice } from "@/lib/billing/plans";
 import { activateSubscription } from "@/lib/billing/activateSubscription";
 import { activateFamilyGroup } from "@/lib/billing/activateFamilyGroup";
+import { activateFamilySeatAddon } from "@/lib/billing/activateFamilySeatAddon";
 import { withErrorHandling } from "@/lib/api-error-handler";
 
 /**
@@ -28,8 +29,9 @@ export const POST = withErrorHandling(async (req: NextRequest) => {
   const childId: string | undefined = body?.childId;
   const planId: string | undefined = body?.planId;
   const isFamily = planId === "family";
+  const isSeatAddon = planId === "family_extra_seat";
 
-  if (!paymentId || !planId || (!isFamily && !childId)) {
+  if (!paymentId || !planId || (!isFamily && !isSeatAddon && !childId)) {
     return NextResponse.json(
       { error: "invalid_request", message: "paymentId, planId가 필요해요 (개인 요금제는 childId도 필요)." },
       { status: 400 }
@@ -64,6 +66,8 @@ export const POST = withErrorHandling(async (req: NextRequest) => {
 
   const result = isFamily
     ? await activateFamilyGroup({ ownerId: user.id, paymentId, amount: verified.amount })
+    : isSeatAddon
+    ? await activateFamilySeatAddon({ guardianId: user.id, paymentId, amount: verified.amount })
     : await activateSubscription({
         guardianId: user.id,
         childId: childId!,
