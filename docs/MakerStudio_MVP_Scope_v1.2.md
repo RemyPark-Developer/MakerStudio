@@ -1,10 +1,11 @@
 # MakerStudio MVP 범위 정의서 (외주 개발용)
 
-**버전**: v1.4 · **최종 수정**: 2026-08-20 · **짝 파일**: `MakerStudio_Project_Design_v2.4.md`
+**버전**: v1.5 · **최종 수정**: 2026-08-20 · **짝 파일**: `MakerStudio_Project_Design_v2.4.md`
 
 ### 개정 이력
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| v1.5 | 2026-08-20 | notifications 도메인에 SMS 채널 추가(`payment_failed`, `child_chat_flagged` 2종만 email+sms). 선행 작업으로 `profiles.phone`(guardian 전화번호 저장 컬럼)을 처음 추가함 — 이전엔 이 값이 DB 어디에도 없었음(설계 시 발견). Solapi는 여전히 프로덕션 미설정, dev bypass로 로직만 완성. 상세는 `DB_Schema_v1.0.md` §1(`profiles.phone`), §5(`notifications`) 참고 |
 | v1.4 | 2026-08-20 | AI 튜터 아동 안전장치(입력 욕설/개인정보 필터 + 보호자 알림) 추가 — 이전엔 어느 문서에도 스코프되지 않았던 항목. 이유: 실사용자 없어 후순위였지만 서비스 오픈 전 최소 안전장치는 필요하다고 판단(대표님 결정). 상세는 `DB_Schema_v1.0.md` §4(`tutor_messages`) 참고. `moderation` 도메인(관리자 콘텐츠 검수)과는 별개 개념 — `learning` 도메인 하위 기능으로 분류 |
 | v1.3 | 2026-08-20 | 가족 요금제를 Won't → Should로 승격, v1.0에 포함시킴(가족 구독 그룹 실제 구현 착수). 이유: 대표님이 이번 단계에서 Family 요금제(₩19,900/월, 최대 3명)를 우선순위로 결정 — 결제내역/환불 화면 연동은 여전히 다음 단계로 미룸(구현 시 `family_groups`/`family_group_members` 테이블 참고) |
 | v1.2 | 2026-08-13 | 포함/제외 이분법을 MoSCoW(Must/Should/Could/Won't) 방식으로 전환 — 위시리스트(기기간 영구저장)를 "Could·협상 요청" 항목으로 v1.0 견적 요청 범위에 포함, 예산 초과 시 1순위 협상 대상으로 명시 |

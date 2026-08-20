@@ -56,3 +56,30 @@ export async function sendVerificationSms(to: string, code: string): Promise<voi
     throw new Error(`SMS 발송 실패: ${JSON.stringify(failed[0])}`);
   }
 }
+
+/** notifications 도메인(lib/notifications/notify.ts)이 긴급 알림에 쓰는 범용 문자. */
+export async function sendNotificationSms(to: string, message: string): Promise<void> {
+  if (process.env.NODE_ENV !== "production" && (!process.env.SOLAPI_API_KEY || !process.env.SOLAPI_API_SECRET)) {
+    console.log(`[DEV ONLY] SMS 발송 스킵 → ${to}에게 보낼 알림: ${message}`);
+    return;
+  }
+
+  const senderNumber = process.env.SOLAPI_SENDER_NUMBER;
+  if (!senderNumber) {
+    throw new Error(
+      "SOLAPI_SENDER_NUMBER가 설정되지 않았어요. Solapi에 등록된 발신번호를 .env.local에 넣어주세요."
+    );
+  }
+
+  const service = getService();
+  const result = await service.send({
+    to: to.replace(/-/g, ""),
+    from: senderNumber,
+    text: `[MakerStudio] ${message}`,
+  });
+
+  const failed = (result as any)?.failedMessageList ?? [];
+  if (Array.isArray(failed) && failed.length > 0) {
+    throw new Error(`SMS 발송 실패: ${JSON.stringify(failed[0])}`);
+  }
+}

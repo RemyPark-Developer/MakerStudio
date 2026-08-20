@@ -29,6 +29,7 @@ Supabase는 이메일·비밀번호·소셜 로그인을 처리하는 `auth.user
 | avatar | text | 이모지 코드 또는 아바타 ID |
 | created_at | timestamptz | |
 | deleted_at | timestamptz, nullable | 소프트 삭제 — §4.5 환불 처리와 시점을 맞추기 위해 즉시 하드 삭제하지 않음(법적 보존 의무 데이터와 분리 원칙, §4.5 참고). 실제 익명화/하드삭제 배치는 별도 운영 정책 필요 |
+| phone | text, nullable (`0018_guardian_phone_and_sms.sql`, 2026-08-20) | guardian이 `app/mypage/settings`에서 직접 입력하는 SMS 알림 수신 번호. 닉네임과 같은 신뢰 수준(자가입력, 소유 재인증 없음). 초등학생 가입 때 쓰는 `guardianPhone`(SMS 인증용, 인메모리, 저장 안 됨)과는 무관한 별개 값 — 재사용 불가라 새로 만듦 |
 
 ### `guardian_child_links`
 | 컬럼 | 타입 | 설명 |
@@ -179,7 +180,8 @@ Family 요금제(₩19,900/월, 최대 3명) 구독 그룹. **`guardian_child_li
 
 **AI 튜터 아동 안전장치(2026-08-20)**: `student_child`가 AI 튜터에게 욕설/개인정보(휴대폰번호·주민등록번호)를
 입력하면 Anthropic 호출 전에 차단하고(`app/api/tutor/route.ts`), `guardian_child_links`로 연결된
-보호자에게 `notifyGuardian()`(§5 notifications 도메인)로 이메일을 보낸다. **`moderation` 도메인
+보호자에게 `notifyGuardian()`(§5 notifications 도메인)로 이메일+SMS를 보낸다(SMS는 0018부터,
+전화번호 등록 안 했으면 이메일만). **`moderation` 도메인
 (관리자 콘텐츠 검수, 아래 참고)과는 별개** — 이름이 비슷해 보이지만 완전히 다른 기능이라 `learning`
 도메인 하위(`lib/learning/tutorSafety.ts`)에 뒀다. 제외한 것: 주소 PII 감지(정규식 신뢰도 낮음),
 주제 이탈 하드 차단(시스템 프롬프트 지시로만 대응), 보호자 신고 UI(로그+자동알림까지만).
@@ -197,25 +199,30 @@ Family 요금제(₩19,900/월, 최대 3명) 구독 그룹. **`guardian_child_li
 |---|---|---|
 | id | uuid, PK | |
 | user_id | uuid, FK → profiles.id | 항상 guardian — 아동 계정에는 직접 알림을 보내지 않는다(§3.2와 같은 맥락) |
-| type | text | `payment_success` \| `payment_activation_failed` \| `payment_failed` \| `subscription_canceled` \| `family_member_added` \| `family_member_removed` (check 제약 없음, 자유 텍스트) |
+| type | text | `payment_success` \| `payment_activation_failed` \| `payment_failed` \| `subscription_canceled` \| `family_member_added` \| `family_member_removed` \| `child_chat_flagged` (check 제약 없음, 자유 텍스트) |
 | message | text | |
 | action_url | text, nullable | |
 | read_at | timestamptz, nullable | |
 | created_at | timestamptz | |
-| channel | text, `'email'`\|`'sms'`, default `'email'` (0016) | 지금은 전부 `email` — guardian 휴대폰번호가 DB 어디에도 영구 저장 안 돼서 SMS는 보류 |
-| delivery_status | text, `'pending'`\|`'sent'`\|`'failed'`, default `'pending'` (0016) | 이메일 발송 실패해도 이 row(인앱 알림)와 그걸 유발한 도메인 액션(예: 결제 활성화)은 그대로 유지됨 |
+| channel | text, `'email'`\|`'sms'`, default `'email'` (0016) | 이벤트 타입이 채널을 여러 개 요구하면(`payment_failed`, `child_chat_flagged`) 채널마다 row를 하나씩 만든다(0018, 2026-08-20) — 별도 정규화 테이블 대신 기존 구조를 재사용한 의도적 단순화 |
+| delivery_status | text, `'pending'`\|`'sent'`\|`'failed'`\|`'skipped'`, default `'pending'` (0016, `'skipped'`는 0018 추가) | 발송 실패해도 이 row(인앱 알림)와 그걸 유발한 도메인 액션(예: 결제 활성화)은 그대로 유지됨. `'skipped'`는 `channel='sms'`인데 guardian이 전화번호를 안 넣어서 발송 시도조차 안 한 경우(진짜 실패와 구분) |
 | delivered_at | timestamptz, nullable (0016) | |
 
 **트리거 지점**: `activateSubscription()`/`activateFamilyGroup()`(결제 성공, `alreadyProcessed`
 아닐 때만), `webhook/portone/route.ts`(결제 활성화 실패, `Transaction.Failed` 웹훅), `subscription/cancel`,
-`family/members` POST/DELETE. 결제 실패(`payment_failed`)는 웹훅이 `Transaction.Paid` 외 타입을
-전부 버리던 걸 이번에 `Transaction.Failed`도 처리하도록 확장해서 연결함.
+`family/members` POST/DELETE, `app/api/tutor/route.ts`(`child_chat_flagged`). 결제 실패(`payment_failed`)는
+웹훅이 `Transaction.Paid` 외 타입을 전부 버리던 걸 이번에 `Transaction.Failed`도 처리하도록 확장해서 연결함.
 
-**API**: `GET /api/notifications`, `PATCH /api/notifications/:id/read` — §7 참고. 인앱 알림함 UI
-페이지는 이번 범위에서 제외(라우트만 존재).
+**API**: `GET /api/notifications`, `PATCH /api/notifications/:id/read` — §7 참고.
 
-**제외한 것**: SMS 채널, 구독 만료 임박 알림(cron 인프라 없음), 콘텐츠 검수 승인/반려 알림(현재
-submitter가 항상 admin이라 실질적 수신자 없음), 알림 on/off 설정 화면.
+**SMS 채널(2026-08-20, 0018)**: `payment_failed`/`child_chat_flagged` 2종만 email+sms, 나머지는
+email만(`lib/notifications/notify.ts`의 `CHANNELS_BY_TYPE`). guardian 전화번호는 `profiles.phone`
+(§1)에 저장 — Solapi(`lib/sms/solapi.ts`)는 프로덕션 키 미설정 상태라 dev bypass(콘솔 로그)로
+로직만 완성함, 실제 발송 확인은 키 설정 후 별도 진행.
+
+**제외한 것**: 구독 만료 임박 알림(cron 인프라 없음), 콘텐츠 검수 승인/반려 알림(현재
+submitter가 항상 admin이라 실질적 수신자 없음), 알림 on/off 설정 화면, SMS 발송 디바운스/합산,
+전화번호 소유 재인증, 발송 시도 정규화 테이블(`notification_deliveries`류).
 
 ---
 

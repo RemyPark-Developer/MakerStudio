@@ -1,12 +1,34 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { CHANNEL_BY_TYPE, buildActionLinkHtml, type NotificationType } from "./notify";
+import { CHANNELS_BY_TYPE, buildActionLinkHtml, type NotificationType } from "./notify";
 
-test("모든 알림 타입은 지금 전부 email 채널이다 — guardian 연락처(휴대폰)가 DB에 없어서 SMS는 아직 못 씀", () => {
-  const types = Object.keys(CHANNEL_BY_TYPE) as NotificationType[];
+test("모든 알림 타입은 최소 email 채널을 포함한다", () => {
+  const types = Object.keys(CHANNELS_BY_TYPE) as NotificationType[];
   assert.ok(types.length > 0);
   for (const type of types) {
-    assert.equal(CHANNEL_BY_TYPE[type], "email", `${type}이 email이 아님 — 의도한 변경이면 이 테스트도 갱신할 것`);
+    assert.ok(CHANNELS_BY_TYPE[type].includes("email"), `${type}에 email이 없음`);
+  }
+});
+
+test("payment_failed와 child_chat_flagged만 sms를 포함한다 — 자가 해결 가능하고 시급한 이벤트만 SMS로 감(2026-08-20 결정)", () => {
+  const types = Object.keys(CHANNELS_BY_TYPE) as NotificationType[];
+  for (const type of types) {
+    const hasSms = CHANNELS_BY_TYPE[type].includes("sms");
+    const shouldHaveSms = type === "payment_failed" || type === "child_chat_flagged";
+    assert.equal(hasSms, shouldHaveSms, `${type}의 sms 포함 여부가 예상과 다름 — 의도한 변경이면 이 테스트도 갱신할 것`);
+  }
+});
+
+test("email만 있는 타입은 채널이 정확히 1개다", () => {
+  const emailOnlyTypes: NotificationType[] = [
+    "payment_success",
+    "payment_activation_failed",
+    "subscription_canceled",
+    "family_member_added",
+    "family_member_removed",
+  ];
+  for (const type of emailOnlyTypes) {
+    assert.deepEqual(CHANNELS_BY_TYPE[type], ["email"]);
   }
 });
 

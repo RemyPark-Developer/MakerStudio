@@ -17,7 +17,7 @@ export const GET = withErrorHandling(async (req: NextRequest) => {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role, nickname, avatar")
+    .select("role, nickname, avatar, phone")
     .eq("id", authData.user.id)
     .maybeSingle();
 
@@ -56,10 +56,17 @@ export const PATCH = withErrorHandling(async (req: NextRequest) => {
   const nickname: string | undefined = body?.nickname?.trim();
   const avatar: string | undefined = body?.avatar;
   const role: string | undefined = body?.role;
+  const phone: string | undefined = body?.phone?.trim();
 
   if (nickname && nickname.length > 10) {
     return NextResponse.json(
       { error: "invalid_request", message: "닉네임은 10자 이하로 입력해주세요.", field: "nickname" },
+      { status: 400 }
+    );
+  }
+  if (phone && !/^01[0-9]-?\d{3,4}-?\d{4}$/.test(phone)) {
+    return NextResponse.json(
+      { error: "invalid_request", message: "휴대폰번호 형식을 확인해주세요.", field: "phone" },
       { status: 400 }
     );
   }
@@ -72,6 +79,7 @@ export const PATCH = withErrorHandling(async (req: NextRequest) => {
       id: user.id,
       ...(nickname ? { nickname } : {}),
       ...(avatar ? { avatar } : {}),
+      ...(phone ? { phone } : {}),
       // 최초 온보딩에서만 role을 정한다 — 이미 있는 사용자의 role은 이 라우트로 못 바꾸게(§3.3 원칙과 일관)
       ...(role && user.isNew ? { role } : {}),
     },
