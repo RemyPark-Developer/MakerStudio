@@ -10,6 +10,7 @@ type Role = "student_teen" | "student_child" | "guardian" | "admin";
 const TABS: { href: string; label: string; roles: Role[] | null }[] = [
   { href: "/mypage", label: "개요", roles: null },
   { href: "/mypage/settings", label: "설정", roles: null },
+  { href: "/mypage/history", label: "AI 대화 기록", roles: null },
   { href: "/mypage/billing", label: "결제", roles: ["guardian", "admin"] },
 ];
 
