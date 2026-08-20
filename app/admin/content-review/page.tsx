@@ -98,7 +98,7 @@ export default function ContentReviewListPage() {
         {modules === null ? (
           <p className="muted">불러오는 중...</p>
         ) : modules.length === 0 ? (
-          <p className="muted">검수 대기 중인 콘텐츠가 없어요.</p>
+          <p className="muted">{TABS.find((t) => t.key === tab)?.label} 콘텐츠가 없어요.</p>
         ) : (
           modules.map((m) => (
             <Link
