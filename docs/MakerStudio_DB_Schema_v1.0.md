@@ -165,6 +165,25 @@ Family 요금제(₩19,900/월, 최대 3명) 구독 그룹. **`guardian_child_li
 | count | smallint | |
 | PRIMARY KEY(user_id, usage_date) | | `lib/rate-limit.ts`를 메모리 대신 이 테이블로 전환(§5.2 명시된 전환 지점) |
 
+### `tutor_messages` (`0012_tutor_messages.sql`, 안전장치 컬럼은 `0017_tutor_safety.sql` 2026-08-20 추가)
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| id | uuid, PK | |
+| user_id | uuid, FK → auth.users | |
+| example_id | text | |
+| role | text, `'user'`\|`'assistant'` | |
+| content | text | `flagged=true`면 원문이 아니라 치환(redact)된 텍스트 — 욕설/개인정보를 DB에 새로 쌓지 않기 위함 |
+| created_at | timestamptz | |
+| flagged | boolean, default false (0017) | `lib/learning/tutorSafety.ts`의 `checkInputSafety()`/`redactPii()`가 감지 |
+| flag_reason | text, nullable (0017) | 지금 쓰는 값: `'profanity'`, `'pii'`. check 제약 없음 — 나중에 관찰용 값 추가 시 마이그레이션 불필요하게 하기 위함 |
+
+**AI 튜터 아동 안전장치(2026-08-20)**: `student_child`가 AI 튜터에게 욕설/개인정보(휴대폰번호·주민등록번호)를
+입력하면 Anthropic 호출 전에 차단하고(`app/api/tutor/route.ts`), `guardian_child_links`로 연결된
+보호자에게 `notifyGuardian()`(§5 notifications 도메인)로 이메일을 보낸다. **`moderation` 도메인
+(관리자 콘텐츠 검수, 아래 참고)과는 별개** — 이름이 비슷해 보이지만 완전히 다른 기능이라 `learning`
+도메인 하위(`lib/learning/tutorSafety.ts`)에 뒀다. 제외한 것: 주소 PII 감지(정규식 신뢰도 낮음),
+주제 이탈 하드 차단(시스템 프롬프트 지시로만 대응), 보호자 신고 UI(로그+자동알림까지만).
+
 ---
 
 ## 5. `notifications` 도메인 (2026-08-20 실제 구현, 0016_notification_delivery.sql)

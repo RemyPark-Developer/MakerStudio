@@ -4,7 +4,15 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { authedFetch } from "@/lib/client-auth";
 
-type Msg = { id: string; example_id: string; role: "user" | "assistant"; content: string; created_at: string };
+type Msg = {
+  id: string;
+  example_id: string;
+  role: "user" | "assistant";
+  content: string;
+  created_at: string;
+  flagged?: boolean;
+  flag_reason?: string | null;
+};
 type Me = { role: string; childId: string | null; needsNickname: boolean };
 
 export default function TutorHistoryPage() {
@@ -135,6 +143,21 @@ export default function TutorHistoryPage() {
                       <span className="muted" style={{ marginLeft: 8, fontSize: 11 }}>
                         {new Date(m.created_at).toLocaleString("ko-KR")}
                       </span>
+                      {m.flagged && (
+                        <span
+                          title={m.flag_reason === "pii" ? "개인정보로 감지되어 처리되지 않음" : "부적절한 표현으로 감지되어 처리되지 않음"}
+                          style={{
+                            marginLeft: 8,
+                            fontSize: 11,
+                            color: "#c0392b",
+                            border: "1px solid #c0392b",
+                            borderRadius: 4,
+                            padding: "1px 5px",
+                          }}
+                        >
+                          ⚠ {m.flag_reason === "pii" ? "개인정보 감지" : "부적절한 표현"}
+                        </span>
+                      )}
                       <p style={{ margin: "4px 0 0", whiteSpace: "pre-wrap" }}>{m.content}</p>
                     </div>
                   ))}

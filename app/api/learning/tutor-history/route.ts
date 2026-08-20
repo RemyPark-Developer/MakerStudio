@@ -34,7 +34,7 @@ export const GET = withErrorHandling(async (req: NextRequest) => {
 
   const { data: messages, error } = await supabase
     .from("tutor_messages")
-    .select("id, example_id, role, content, created_at")
+    .select("id, example_id, role, content, created_at, flagged, flag_reason")
     .eq("user_id", targetUserId)
     .order("created_at", { ascending: true });
 

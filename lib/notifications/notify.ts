@@ -7,7 +7,8 @@ export type NotificationType =
   | "payment_failed"
   | "subscription_canceled"
   | "family_member_added"
-  | "family_member_removed";
+  | "family_member_removed"
+  | "child_chat_flagged";
 
 /**
  * 이벤트 타입별 발송 채널. 지금은 전부 email — SMS는 guardian 연락처가 DB에 영구
@@ -22,6 +23,7 @@ export const CHANNEL_BY_TYPE: Record<NotificationType, "email" | "sms"> = {
   subscription_canceled: "email",
   family_member_added: "email",
   family_member_removed: "email",
+  child_chat_flagged: "email",
 };
 
 const SUBJECT_BY_TYPE: Record<NotificationType, string> = {
@@ -31,6 +33,7 @@ const SUBJECT_BY_TYPE: Record<NotificationType, string> = {
   subscription_canceled: "구독이 해지됐어요",
   family_member_added: "Family 그룹에 아이가 추가됐어요",
   family_member_removed: "Family 그룹에서 아이가 제거됐어요",
+  child_chat_flagged: "자녀의 AI 튜터 대화에서 확인이 필요한 내용이 있어요",
 };
 
 export type NotifyGuardianInput = {
