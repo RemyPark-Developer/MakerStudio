@@ -1,8 +1,11 @@
 import Link from "next/link";
-import { getAllExamples } from "@/lib/content";
+import { listAllExamples } from "@/lib/content/listExamples";
 
-export default function ExamplesPage() {
-  const examples = getAllExamples();
+// 관리자가 콘텐츠를 승인하면 새로고침만으로 바로 보여야 하므로 정적 생성하지 않는다.
+export const dynamic = "force-dynamic";
+
+export default async function ExamplesPage() {
+  const examples = await listAllExamples();
 
   return (
     <main className="wrap">
@@ -10,8 +13,8 @@ export default function ExamplesPage() {
       <h1>학습 콘텐츠</h1>
       <p style={{ color: "var(--ink-dim)" }}>
         아래 목록은 코드에 하드코딩된 게 아니라{" "}
-        <code>content/examples/*.json</code> 폴더를 읽어서 자동으로 만들어집니다.
-        이 폴더에 스키마에 맞는 JSON 파일을 하나 추가하면, 새로고침만으로 예제가 하나 늘어납니다.
+        <code>content/examples/*.json</code> 폴더와, 관리자가 검수·승인한 콘텐츠를
+        함께 읽어서 자동으로 만들어집니다.
       </p>
 
       {examples.map((ex) => (
