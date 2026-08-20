@@ -49,6 +49,7 @@
 | 미성년자 결제 차단 | API 미들웨어 + RLS 이중 방어 | 인증/인가 플로우 문서 §3 |
 | 의존성 취약점 점검 | `npm audit` 또는 Dependabot을 CI에 포함, high 이상 취약점은 배포 차단 | §9.1 확장 |
 | 아동 동의 감사 로그 | 보호자 SMS 인증 성공/실패 기록 보관 | 인증 플로우 문서 §2.3 |
+| AI 튜터 아동 안전장치 | `student_child` 입력의 욕설/개인정보(휴대폰번호·주민등록번호)를 Anthropic 호출 전에 차단, 응답에도 PII 재스캔, 보호자에게 즉시 알림(email+SMS) | `lib/learning/tutorSafety.ts`, 2026-08-20 추가 |
 | OWASP Top 10 기본 대응 | SQL 인젝션(Supabase 파라미터 바인딩으로 기본 방어), XSS(React 기본 이스케이핑 신뢰, `dangerouslySetInnerHTML` 사용 시 별도 검토) | 신규 |
 
 ---

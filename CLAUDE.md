@@ -20,7 +20,7 @@ Claude Code가 이 저장소에서 작업할 때 항상 먼저 읽어야 하는 
 
 - **콘텐츠 검증**: `content/examples/`에 파일을 추가/수정하면 `npm run validate-content`와 `npm run validate-arduino`를 반드시 통과해야 함. CI가 자동으로 막지만, 로컬에서 먼저 돌려볼 것.
 - **테스트**: 결제·인증 관련 로직은 단위 테스트 없이 커밋하지 않는다 (`lib/rate-limit.test.ts` 참고 패턴).
-- **도메인 분리**: 새 API 라우트는 `app/api/{domain}/...` 형태로, `identity`/`billing`/`content`/`learning`/`notifications`/`commerce` 중 하나에 속하게 만든다. 도메인끼리는 직접 DB를 건드리지 않고 함수 호출/이벤트로 통신한다 (`Design.md` §5.5).
+- **도메인 분리**: 새 API 라우트는 `app/api/{domain}/...` 형태로, `identity`/`billing`/`content`/`learning`/`notifications`/`commerce`/`moderation` 중 하나에 속하게 만든다. 도메인끼리는 직접 DB를 건드리지 않고 함수 호출/이벤트로 통신한다(`Design.md` §5.5) — 이 저장소엔 실제 이벤트 버스가 없어서 "이벤트"는 지금까지 전부 순수 함수 호출로 구현됨(`notifyGuardian()` 등). **`moderation` 도메인(관리자 콘텐츠 검수)과 "AI 튜터 아동 안전장치"(`lib/learning/tutorSafety.ts`)는 이름이 비슷해 보여도 완전히 다른 기능이니 헷갈리지 말 것** — 후자는 `learning` 도메인 하위.
 - **버전 관리**: 위 `docs/` 문서 중 하나라도 이 저장소의 결정과 달라지면, 코드보다 문서를 먼저 고치고 커밋 메시지에 사유를 남긴다. 문서가 낡으면 다음 세션(다른 AI든 사람이든)이 잘못된 전제로 작업하게 된다.
 - **환경 변수**: `.env.local`에만 시크릿 저장, 커밋 금지. 새 시크릿이 필요하면 `.env.local.example`에 키 이름만 추가.
 
@@ -35,7 +35,10 @@ Claude Code가 이 저장소에서 작업할 때 항상 먼저 읽어야 하는 
 - `lib/supabase/server.ts`, `lib/supabase/auth-context.ts` — Supabase 서버 클라이언트 + 인증 헬퍼.
 - `supabase/migrations/0001_init.sql`, `0002_tutor_usage_increment.sql`, `0003_auto_create_profile.sql`, `0004_grant_service_role.sql`, `0005_subscriptions_unique.sql` — DB 스키마 전체 + AI튜터 사용량 원자적 증가 함수 + 회원가입 시 profiles 자동생성 트리거 + service_role 권한 부여 + subscriptions 유니크 제약. 전부 로컬 Postgres로 실제 실행·검증 완료. **Supabase에 처음 적용할 때 0001→0002→0003→0004→0005 순서대로 SQL Editor에서 실행할 것.**
 - `lib/billing/*`, `app/api/billing/*`, `app/checkout/page.tsx` — 포트원(PortOne) V2 결제 연동. **서버가 결제를 만드는 게 아니라 브라우저가 결제창을 열고 서버는 검증만 하는 구조**(다른 PG 연동과 헷갈리지 말 것). `activateSubscription()`이 checkout/verify와 webhook 양쪽에서 호출되므로 반드시 멱등성(중복 처리 방지)을 유지할 것. **checkout의 `customData`엔 반드시 `guardianId`를 담을 것** — 이게 빠지면 웹훅(`webhook/portone/route.ts`)이 조용히 스킵된다(2026-08-14~08-20 사이 실제로 이 상태였던 버그, 08-20에 수정).
-- `family_groups`/`family_group_members`(`0014_family_groups.sql`), `lib/billing/activateFamilyGroup.ts`, `lib/billing/familyMembership.ts`(`checkCanAddFamilyMember`, 단위테스트 있음), `app/api/billing/family/members/*`, `/mypage/billing`의 Family 카드 — Family 요금제(₩19,900/월, 최대 3명, 2026-08-20 추가, MVP_Scope v1.3에서 Won't→Should 승격). **`guardian_child_links`는 이 기능이 절대 건드리지 않음** — family_group_members에 아이 추가 전 반드시 guardian_child_links로 법적 관계를 서버에서 재확인(`checkCanAddFamilyMember`). `gate.ts`의 `hasPremiumAccess()`는 개인 `subscriptions` 실패 시 family_group 멤버십도 확인하도록 확장됨. **⚠️ `payments`/`subscriptions` 테이블과 분리되어 있어 Family 결제는 결제내역·환불 화면에 아직 안 나타남** — 다음 단계 작업(MVP_Scope.md §2 참고). 좌석 추가·정원초과 동시성·다운그레이드 축소 정책도 다음 단계.
+- **Family 요금제(2026-08-20 도입, 전체 라이프사이클 완성)** — `family_groups`/`family_group_members`(`0014`), `lib/billing/activateFamilyGroup.ts`(재결제 시 좌석 자동 리셋+정원초과 자동정리 포함), `lib/billing/activateFamilySeatAddon.ts`(좌석 추가), `app/api/billing/family/{members,cancel}/*`, `lib/billing/familyMembership.ts`(`checkCanAddFamilyMember`)+`familySeatReconciliation.ts`(`selectMembersToRemove`), `/mypage/billing`의 Family 카드. **`guardian_child_links`는 이 기능이 절대 건드리지 않음** — `family_group_members`에 아이 추가 전 반드시 `guardian_child_links`로 법적 관계를 서버에서 재확인(`checkCanAddFamilyMember`). 결제내역(`payments.family_group_id`, 0015)·환불(`refund/calculate`의 `family:true` 분기, 5개 이용내역 테이블 합산 판단)·정원초과 동시성 방어(`add_family_member` RPC, 0020)·좌석 추가(₩4,900/좌석, 최대 6석, **그 결제 주기만 유효** — 이 프로젝트는 정기결제가 아니라 매번 브라우저가 여는 일회성 결제 구조라 자동 재청구 불가)·해지 API 전부 구현·검증 완료. 상세 설계 판단은 `docs/MakerStudio_Session_2026-08-20_Summary_v1.1.md` §3·7·8·9·10 참고.
+- **notifications 도메인(2026-08-20 실제 채워짐)** — `lib/notifications/notify.ts`의 `notifyGuardian()`이 billing/family/learning 도메인 이벤트(결제 성공/실패, 구독·Family 해지, Family 멤버/좌석 변경, `child_chat_flagged` 등)를 email(Resend)로, 그중 `payment_failed`/`child_chat_flagged` 2종만 SMS(Solapi, **dev bypass 상태 — 프로덕션 키 미설정**)로도 보냄. `notifications` 테이블은 `0001_init.sql`부터 있었지만 이 도메인이 생기기 전까진 계속 비어있던(insert하는 코드가 없던) 테이블이었음. SMS 받으려면 guardian이 `/mypage/settings`에서 전화번호를 직접 입력해야 함(`profiles.phone`, 0018 추가 — 이전엔 이 컬럼 자체가 없었음). 인앱 알림함은 `/mypage/notifications`.
+- **AI 튜터 아동 안전장치(2026-08-20, `lib/learning/tutorSafety.ts`)** — `student_child`가 AI 튜터에 욕설/개인정보(휴대폰번호·주민등록번호)를 입력하면 Anthropic 호출 전에 차단(`app/api/tutor/route.ts`), 차단된 시도는 하루 10회 quota를 안 깎음, 응답에도 PII 재스캔. `guardian_child_links`로 연결된 보호자에게 `notifyGuardian()`으로 알림. `moderation` 도메인과는 무관(위 도메인 분리 항목 참고).
+- **`lib/content/gate.ts` 접근 판단 버그 수정(2026-08-20)** — `hasPremiumAccess()`/`hasFamilyPlanAccess()`가 원래 `status === 'active'`까지 요구해서, 구독/Family를 해지한 순간(잔여기간이 남았어도) 즉시 접근이 끊기고 있었음(§4.3 "해지해도 결제기간 끝까지는 이용 가능" 원칙 위반, 개인/Family 둘 다 해당). 지금은 `current_period_end`만으로 판단 — **새 접근 제어 로직을 짤 때 이 원칙(해지 ≠ 즉시 차단, 기간 만료만 차단)을 그대로 따를 것.**
 - **⚠️ 절대 규칙 (2026-08-14 추가)**: Supabase 프로젝트를 새로 만들 때 "Automatically expose new tables"를 끄면, service_role조차 새 테이블에 접근 못 하게 된다(`42501 permission denied`). 이 프로젝트는 0004 마이그레이션으로 이미 복구·재발방지 처리를 했지만, **새 Supabase 프로젝트를 만드는 상황이 또 생기면 이 마이그레이션도 반드시 같이 적용할 것.**
 - **⚠️ 절대 규칙 추가 (2026-08-14)**: `auth.users`를 생성하는 코드(회원가입 등)에서 **절대로 `profiles`를 별도 `.insert()`로 만들지 말 것.** `0003_auto_create_profile.sql`의 트리거가 `user_metadata`(role, nickname)를 읽어서 자동으로 만든다. 별도 insert를 추가하면 트리거와 충돌해 중복키 에러가 난다. 새 가입 경로를 만들 때는 `createUser({ user_metadata: { role, nickname } })` 패턴만 쓸 것.
 - `app/page.tsx`(랜딩), `app/login`, `app/signup`, `app/forgot-password` — 프로토타입에서 이식한 실제 화면, 위 API에 실제 연결됨. 콘텐츠 목록은 `app/examples`로 이동함.
@@ -51,11 +54,12 @@ Claude Code가 이 저장소에서 작업할 때 항상 먼저 읽어야 하는 
 
 (현재 없음 — 2026-08-13 AI튜터 로그인 필수 여부 결정으로 마지막 미결 항목 해소됨)
 
-## 아직 안 된 것 (2단계 잔여)
+## 아직 안 된 것
 
 - 소셜 로그인(카카오·구글) OAuth 콜백 자체 연동 — Supabase 프로젝트에서 OAuth 프로바이더 설정 필요
-- `guardian_child_links` 실제 연결 로직 (초등학생 가입 완료 시 보호자 계정과 매칭하는 부분, `app/api/identity/signup/child/verify/route.ts`의 TODO 참고)
-- 나머지 화면 이식(카탈로그·결제·학습화면) — Dev_Sequence.md 기준 해당 백엔드 단계가 준비될 때 순서대로
+- Solapi 프로덕션 키 설정 — 로직·검증은 끝났고 키만 넣으면 됨(서비스 오픈 준비 시점, `.env.local`)
+- 회사 귀책(중복결제·시스템오류) 전액환불 자동 판별, Family→Premium/Free 요금제 티어 전환, 구독/Family 만료 임박 알림(cron 인프라 필요), 콘텐츠 검수 승인/반려 알림(비-admin 제출 플로우 필요) — 전부 의도적으로 보류된 항목, 대표님이 먼저 꺼낼 때 시작. 각각의 판단 근거는 `~/.claude/projects/-workspaces-MakerStudio/memory/`의 project 메모리 참고.
+- (**"나머지 화면 이식"은 2026-08-20 기준 사실상 완료** — `guardian_child_links` 실제 연결 로직도 2026-08-18에 이미 구현됨. 이 섹션이 예전엔 이 두 개를 "미완료"로 적어뒀었는데, 실제로는 끝나 있었던 걸 2026-08-20에 발견함 — 이 파일도 코드만큼 자주 낡을 수 있다는 반증이니 의심되면 실제 코드/커밋을 먼저 확인할 것.)
 
 ## 지금 뭘 해야 하는지 모르겠으면
 
