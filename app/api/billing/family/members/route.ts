@@ -10,6 +10,14 @@ import { notifyGuardian } from "@/lib/notifications/notify";
  * POST: 자녀를 family_group에 추가. 반드시 guardian_child_links로 법적 관계를 먼저 확인한다
  * (checkCanAddFamilyMember, lib/billing/familyMembership.ts).
  */
+
+const ADD_MEMBER_ERROR_MESSAGES: Record<string, string> = {
+  not_legal_guardian: "이 아이의 법적 보호자로 등록되어 있지 않아요.",
+  no_active_family_plan: "Family 요금제에 가입되어 있지 않아요.",
+  already_member: "이미 가족 그룹에 속한 아이예요.",
+  seat_limit_reached: "가족 그룹 정원(3명)이 다 찼어요.",
+};
+
 export const GET = withErrorHandling(async (req: NextRequest) => {
   const user = await getAuthedUser(req);
   if (!requireGuardian(user)) {
@@ -95,24 +103,30 @@ export const POST = withErrorHandling(async (req: NextRequest) => {
   });
 
   if (!check.ok) {
-    const messages: Record<string, string> = {
-      not_legal_guardian: "이 아이의 법적 보호자로 등록되어 있지 않아요.",
-      no_active_family_plan: "Family 요금제에 가입되어 있지 않아요.",
-      already_member: "이미 가족 그룹에 속한 아이예요.",
-      seat_limit_reached: "가족 그룹 정원(3명)이 다 찼어요.",
-    };
     return NextResponse.json(
-      { error: check.reason, message: messages[check.reason] },
+      { error: check.reason, message: ADD_MEMBER_ERROR_MESSAGES[check.reason] },
       { status: check.status }
     );
   }
 
-  const { error } = await supabase
-    .from("family_group_members")
-    .insert({ family_group_id: familyGroup!.id, child_id: childId });
+  // ⚠️ 사전 체크(checkCanAddFamilyMember)를 통과했어도 여기서 다시 막힐 수 있다 —
+  // 동시에 들어온 다른 요청이 그 사이 정원을 채웠을 경우. add_family_member RPC가
+  // family_groups row를 잠그고 최종 판단을 원자적으로 다시 하는 진짜 소스오브트루스다
+  // (2026-08-20 좌석초과 동시성 방어 설계).
+  const { data: rpcResult, error: rpcError } = (await supabase
+    .rpc("add_family_member", { p_family_group_id: familyGroup!.id, p_child_id: childId })
+    .single()) as { data: { ok: boolean; reason: string | null } | null; error: any };
 
-  if (error) {
+  if (rpcError || !rpcResult) {
     return NextResponse.json({ error: "server_error", message: "추가에 실패했어요." }, { status: 500 });
+  }
+
+  if (!rpcResult.ok) {
+    const reason = rpcResult.reason as string;
+    return NextResponse.json(
+      { error: reason, message: ADD_MEMBER_ERROR_MESSAGES[reason] ?? "추가에 실패했어요." },
+      { status: 409 }
+    );
   }
 
   const notifyResult = await notifyGuardian({

@@ -71,6 +71,14 @@ Family 요금제(₩19,900/월, 최대 3명) 구독 그룹. **`guardian_child_li
 아이를 `family_group_members`에 넣으려면 서버가 먼저 `guardian_child_links`로 법적 관계를 확인해야
 한다(`app/api/billing/family/members/route.ts`, `lib/billing/familyMembership.ts`의 `checkCanAddFamilyMember`).
 
+**좌석초과 동시성 방어(0020, 2026-08-20)**: `checkCanAddFamilyMember()`의 사전 체크만으로는
+서로 다른 자녀 2명이 동시에 추가 요청을 보내면 둘 다 통과해서 정원(3명)을 넘길 수 있었다.
+`add_family_member(p_family_group_id, p_child_id)` RPC가 `family_groups` row를 `for update`로
+잠가서 같은 그룹에 대한 동시 요청을 직렬화하고, 최종 판단(플랜 활성 여부·중복·정원)을 원자적으로
+다시 한다 — `increment_tutor_usage`(0002), `submit_quiz_attempt`(0008/0009)와 같은 패턴. 같은
+아이를 두 번 동시에 추가하는 레이스는 `family_group_members.child_id`의 `unique` 제약이 이미
+막고 있어서 이 함수가 따로 신경 쓰지 않는다.
+
 | 테이블 | 컬럼 | 설명 |
 |---|---|---|
 | `family_groups` | id, owner_id(FK→profiles.id, unique), plan_tier, seat_limit(=3 고정), status(`active`\|`canceled`), current_period_start/end, canceled_at, created_at, updated_at | 보호자당 1개. `owner_id` unique라서 결제 검증(verify)과 웹훅이 같은 결제를 중복 처리해도 자연히 멱등적 |
