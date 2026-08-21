@@ -1,10 +1,11 @@
 # 2026-08-21 세션 요약 — 설계 판단과 구현 범위
 
-**버전**: v1.5 · **최종 수정**: 2026-08-21 · **짝 파일**: `MakerStudio_Auth_Flow_v1.0.md`, `MakerStudio_Session_2026-08-20_Summary_v1.1.md`
+**버전**: v1.6 · **최종 수정**: 2026-08-21 · **짝 파일**: `MakerStudio_Auth_Flow_v1.0.md`, `MakerStudio_Session_2026-08-20_Summary_v1.1.md`
 
 ### 개정 이력
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| v1.6 | 2026-08-21 | `/mypage/billing` 실브라우저 UI 확인 이어붙임 — API 레벨 검증을 넘어 실제 화면 렌더링까지 확인 |
 | v1.5 | 2026-08-21 | 남은 4개 테이블(`examples`/`password_reset_tokens`/`tutor_usage`/`wishlist_items`) 확인으로 실DB 19개 테이블 전수 완료 — 새 마이그레이션 없음(전부 정상 상태였음) |
 | v1.4 | 2026-08-21 | `content_modules` GRANT 보완(0029) 이어붙임 — content 도메인 테이블까지 전수 확인 마무리 |
 | v1.3 | 2026-08-21 | `pg_policies` 진단 RPC(0026) + `profiles`/`progress`/`saved_codes` 정책 드리프트 백필(0027) + `guardian_child_links` 정책 누락 버그 수정(0028) 이어붙임 |
@@ -26,6 +27,7 @@
 | 4 | `pg_policies` 진단 RPC + 정책 드리프트 발견·수정 | `47636bc` | `0026`, `0027`, `0028` |
 | 5 | `content_modules`/`content_generation_log` GRANT 확인 | `3cbd5cd` | `0029` |
 | 6 | 남은 4개 테이블 확인 — 실DB 19개 테이블 전수 완료 | (문서만) | 없음 |
+| 7 | `/mypage/billing` 실브라우저 UI 확인 | (문서만) | 없음 |
 
 ---
 
@@ -314,6 +316,42 @@ REST로 노출하지 않아 지금까지는 정책 존재 여부를 간접 실�
 (`content_generation_log` 포함, 정책 없음=정상). 더 이상 확인이 필요한 테이블 없음.
 
 (상세: [[project-rls-missing-grants-other-tables]] 최종 결론)
+
+---
+
+## 7. `/mypage/billing` 실브라우저 UI 확인
+
+**커밋**: 없음(코드/마이그레이션 변경 없음, 검증만)
+
+### 배경
+
+지금까지의 검증은 전부 API 레벨(`curl`/`supabase-js` 직접 호출)이었음 — 대표님이
+"mypage/billing 같은 실제 UI에서도 한번 눌러서 확인해줘"라고 요청. 이 저장소엔 이걸
+위한 프로젝트 전용 skill이 없어서 `run` skill의 범용 패턴(playwright)을 새로 적용함.
+
+### 방법
+
+- `chromium-cli`가 이 환경엔 없어서 `npx playwright install chromium`으로 직접 설치.
+- 임시 guardian 계정 + 실제 `subscriptions`/`payments` row를 service_role로 생성(오늘
+  써온 패턴과 동일).
+- Playwright로 **실제 로그인 폼**(`/login`, `#email`/`#password` 필드, 이 프로젝트는
+  세션을 쿠키가 아니라 `localStorage`에 저장 — `app/login/page.tsx` 확인)을 채우고
+  제출 → `/mypage`로 정상 리다이렉트 → `/mypage/billing`으로 이동 → 스크린샷 +
+  본문 텍스트 + 브라우저 콘솔 에러 수집.
+
+### 결과
+
+- 로그인 정상, `/mypage/billing` 완전히 렌더링: 요금제 목록, 방금 만든 결제 내역(9,900원,
+  success) 정확히 표시, 구독 해지 버튼, Family 요금제 카드까지 전부 정상.
+- 브라우저 콘솔 에러 없음.
+- 이 화면은 여전히 `service_role` 경유 API 라우트를 쓰므로 RLS 영향을 안 받는 게
+  맞고, 이번 확인은 "API 레벨 회귀 없음"을 "실제 화면 렌더링 레벨"까지 한 단계 더
+  확실히 한 것.
+
+### 의도적으로 제외한 것
+
+- 프로젝트 전용 run skill(`/run-skill-generator`)로 이 절차를 캡처하는 것 — 대표님이
+  요청 안 함, 일회성 확인이라 당장은 불필요.
 
 ---
 
