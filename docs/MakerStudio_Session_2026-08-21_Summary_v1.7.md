@@ -1,10 +1,11 @@
 # 2026-08-21 세션 요약 — 설계 판단과 구현 범위
 
-**버전**: v1.6 · **최종 수정**: 2026-08-21 · **짝 파일**: `MakerStudio_Auth_Flow_v1.0.md`, `MakerStudio_Session_2026-08-20_Summary_v1.1.md`
+**버전**: v1.7 · **최종 수정**: 2026-08-21 · **짝 파일**: `MakerStudio_Auth_Flow_v1.0.md`, `MakerStudio_Session_2026-08-20_Summary_v1.1.md`
 
 ### 개정 이력
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| v1.7 | 2026-08-21 | `content_modules.is_premium` 추가 + 관리자 유료 설정 + RLS 동시 수정(0030) 이어붙임 — 2026-08-20에 보류했던 항목을 실제 요구사항이 생겨 완료 |
 | v1.6 | 2026-08-21 | `/mypage/billing` 실브라우저 UI 확인 이어붙임 — API 레벨 검증을 넘어 실제 화면 렌더링까지 확인 |
 | v1.5 | 2026-08-21 | 남은 4개 테이블(`examples`/`password_reset_tokens`/`tutor_usage`/`wishlist_items`) 확인으로 실DB 19개 테이블 전수 완료 — 새 마이그레이션 없음(전부 정상 상태였음) |
 | v1.4 | 2026-08-21 | `content_modules` GRANT 보완(0029) 이어붙임 — content 도메인 테이블까지 전수 확인 마무리 |
@@ -28,6 +29,7 @@
 | 5 | `content_modules`/`content_generation_log` GRANT 확인 | `3cbd5cd` | `0029` |
 | 6 | 남은 4개 테이블 확인 — 실DB 19개 테이블 전수 완료 | (문서만) | 없음 |
 | 7 | `/mypage/billing` 실브라우저 UI 확인 | (문서만) | 없음 |
+| 8 | `content_modules.is_premium` 추가 + 관리자 유료 설정 + RLS 동시 수정 | `5807660` | `0030` |
 
 ---
 
@@ -355,12 +357,79 @@ REST로 노출하지 않아 지금까지는 정책 존재 여부를 간접 실�
 
 ---
 
+## 8. `content_modules.is_premium` 추가 + 관리자 유료 설정 + RLS 동시 수정
+
+**커밋**: `5807660`(0030)
+
+### 배경
+
+2026-08-20에 "지금은 전부 무료 취급, 필요해지면 컬럼 추가"로 보류했던 항목
+(→ [[project-content-modules-premium-deferred]])을, RGB LED 색상 제어 강의를 실제로
+유료 판매해야 하는 요구사항이 생겨 오늘 완료함. 대표님이 이틀 전 §7.2(Premium 콘텐츠
+SSG 금지) 관련 위험을 미리 알고 있었고("RLS 정책 수정 부분은 SQL 먼저 보여주고 승인받은
+후 진행"), 실제로 그 경고가 현실화되는 상황이라 승인 절차를 그대로 따름.
+
+### 핵심 설계 판단
+
+- `content_modules.is_premium boolean not null default false` 컬럼 추가.
+- `lib/content/publishedModules.ts`의 `mapRowToExample()` — 하드코딩된 `isPremium: false`를
+  `row.is_premium`으로 교체.
+- `app/admin/content-review/[id]/page.tsx`에 "유료(Premium) 콘텐츠로 설정" 체크박스 추가
+  — `app/api/content/[id]/review/route.ts`가 `action==='approve'`일 때만 `is_premium`을
+  반영(반려는 무관, 이미 published된 콘텐츠의 유료 여부를 나중에 바꾸려면 다시
+  pending_review로 되돌린 뒤 재승인해야 함 — 별도 "유료 여부만 수정" API는 이번 범위
+  아님).
+- **컬럼 추가와 RLS 정책 수정을 한 마이그레이션에 묶음** — `content_modules_public_read_published`
+  정책(0010/0029)이 `status='published'`만 보고 premium 여부를 안 봤던 걸
+  `using (status = 'published' and is_premium = false)`로 수정. 컬럼만 먼저 추가하고
+  정책 수정을 나중으로 미뤘다면, 그 사이 시간 동안 PostgREST 직접 접근으로 유료
+  `code`/`explain`이 anon에게 그대로 노출되는 창이 실제로 열렸을 것.
+- `lib/content/gate.ts`는 재확인 결과 수정 불필요 — `example.isPremium` 필드만 보고
+  게이팅하는 기존 로직이 `row.is_premium`을 그대로 반영한 `Example` 객체에도 아무
+  변경 없이 동작함. 목록 API(`app/api/content/examples/route.ts`)도 애초에 응답
+  필드를 화이트리스트로 골라 보내서(`code`/`explain`/`quiz` 자체가 없음) premium
+  여부와 무관하게 항상 안전한 것도 확인.
+
+### 검증 방법 — 실제 admin 승인 API로 RGB LED 콘텐츠를 진짜 유료 전환(테스트 후 되돌리지 않음)
+
+- 실제 admin 임시 계정으로 `app/api/content/[id]/review`를 `{action:'approve', isPremium:true}`로
+  호출 → `content_modules.is_premium = true`로 반영 확인.
+- 무료회원(구독 없음)·비로그인 토큰으로 상세 조회 → `locked: true`, `code` 필드 응답에
+  아예 없음.
+- 유료회원(활성 premium 구독) 토큰으로 상세 조회 → `locked: false`, `code` 정상 반환
+  (1764자, 실제 코드).
+- 목록 API → `isPremium: true`는 보이지만 `code`는 애초에 응답에 없음.
+- **anon key로 `content_modules` 직접 REST 접근** → 0건 — RLS가 `is_premium=true` 행을
+  정확히 걸러냄, 이틀 전 경고했던 우회경로가 실제로 막히는 것 확인.
+- `npm test` 53개 전부 통과, 타입체크는 기존에 있던(이번 변경과 무관한) `gate.test.ts`
+  에러 1개 외엔 이상 없음.
+
+### 트러블슈팅
+
+- 첫 시도에서 dev server를 여러 번 껐다 켜는 과정에서 `.next` 빌드 캐시가 깨져
+  (`Cannot find module './vendor-chunks/@supabase.js'`) review API가 500을 반환,
+  RGB LED 콘텐츠가 `pending_review` 상태로 잠깐 멈춰 있었음(published가 아니게 됨) —
+  `.next` 삭제 + 프로세스 확실히 종료 후 재시작으로 해결, 재검증까지 전부 통과.
+  **교훈: `lsof -ti:PORT | xargs kill`이 이 환경에서 가끔 안 먹힐 수 있음(여러 개의
+  next dev 프로세스가 겹쳐서 떠 있었음) — `ps aux | grep next`로 실제 PID를 직접
+  확인하고 `kill -9`하는 게 더 확실함.**
+
+### 의도적으로 제외한 것
+
+- 이미 `published`인 콘텐츠의 유료 여부만 따로 바꾸는 API(재승인 절차 없이) — 이번
+  범위 아님, 필요해지면 별도 PATCH 엔드포인트로.
+- `content-review` 목록 화면(`app/admin/content-review/page.tsx`)에 유료 배지 표시 —
+  요청받지 않음.
+
+(상세: [[project-content-modules-premium-deferred]])
+
+---
+
 ## 다음에 이어갈 것 (전부 대표님이 먼저 꺼낼 때 시작 — 2026-08-20 문서에서 이월)
 
 - Solapi 프로덕션 키 설정
 - 구독/Family 만료 임박 알림 (cron 인프라 선결정 필요)
 - 콘텐츠 검수 승인/반려 알림 (비-admin 제출 플로우가 생기면)
-- `content_modules.is_premium` 컬럼 (DB 생성 콘텐츠도 프리미엄으로 팔아야 하는 요구사항이 생기면)
 - 회사 귀책 전액환불 자동 판별 (`payments.status`에 사유 플래그 추가하는 스키마 작업부터 필요)
 - Family → Premium/Free 요금제 티어 전환
 - `progress`/`saved_codes` 미사용 판단 로직의 실데이터 검증 (`examples` 테이블에 데이터가 생기면)
