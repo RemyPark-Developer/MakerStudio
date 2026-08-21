@@ -1,10 +1,11 @@
 # 2026-08-21 세션 요약 — 설계 판단과 구현 범위
 
-**버전**: v1.1 · **최종 수정**: 2026-08-21 · **짝 파일**: `MakerStudio_Auth_Flow_v1.0.md`, `MakerStudio_Session_2026-08-20_Summary_v1.1.md`
+**버전**: v1.2 · **최종 수정**: 2026-08-21 · **짝 파일**: `MakerStudio_Auth_Flow_v1.0.md`, `MakerStudio_Session_2026-08-20_Summary_v1.1.md`
 
 ### 개정 이력
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| v1.2 | 2026-08-21 | `learning_progress`/`quiz_attempts`/`tutor_messages`/`content_review_messages` GRANT 보완(0025) 이어붙임 — 남은 3곳 전부 한 번에 마무리, RLS GRANT 이슈 완전 종결 |
 | v1.1 | 2026-08-21 | `family_groups`/`family_group_members` GRANT 보완(0024) 이어붙임 — 대표님이 "이번 기회에 마저 고치자"고 해서 같은 날 추가 진행 |
 | v1.0 | 2026-08-21 | 최초 작성 — `payments`/`subscriptions`/`notifications` RLS 구현 1건 |
 
@@ -18,6 +19,7 @@
 |---|---|---|---|
 | 1 | `payments`/`subscriptions`/`notifications` RLS 구현 | `8c9d32f` | `0022`, `0023` |
 | 2 | `family_groups`/`family_group_members` GRANT 보완 | `247fb23` | `0024` |
+| 3 | 남은 4개 테이블 GRANT 보완 | `81d495d` | `0025` |
 
 ---
 
@@ -133,6 +135,49 @@ Security) 이중 방어"로 막혀 있다고 명시하지만, 2026-08-20 점검(
 
 ---
 
+## 3. 남은 4개 테이블 GRANT 보완 — RLS GRANT 이슈 완전 종결
+
+**커밋**: `81d495d`(0025)
+
+### 배경
+
+2번 항목을 마치고 대표님이 "`learning_progress`도 GRANT 보완할까"라고 다시 제안. 확인
+결과 `learning_progress`는 같은 마이그레이션(0008)의 `quiz_attempts`와 항상 같이
+움직이는 게 맞다고 판단해 범위를 물었고, 대표님이 "남은 3곳(4개 테이블) 전부"를 선택 —
+`learning_progress`, `quiz_attempts`(0008), `tutor_messages`(0012),
+`content_review_messages`(0013).
+
+### 핵심 설계 판단
+
+- 전부 기존 정책은 그대로 두고 GRANT만 추가. `learning_progress`는 select/insert/update
+  정책이 다 있어 그 셋을 GRANT, `quiz_attempts`는 select/insert만(append-only 설계),
+  `tutor_messages`/`content_review_messages`는 select만(insert는 의도적으로 서버
+  전용으로 남김).
+- `content_review_messages`는 admin 전용 정책(`profiles.role='admin'` 체크)이지만,
+  Postgres GRANT는 role 단위지 "행 단위 조건"을 못 건다 — GRANT는 `authenticated`
+  전체에 주고, admin만 실제로 보이게 하는 건 기존 정책이 그대로 담당(0022의
+  `subscriptions_admin_select`와 동일 구조).
+
+### 검증 방법
+
+- student_teen(본인)/다른 student_teen/admin 3개 임시 계정 생성, 4개 테이블에 각각
+  row 하나씩 만들고 실제 JWT로 조회:
+  - `learning_progress`: 본인 select/update/insert 전부 정상, 다른 사용자는 0건
+  - `quiz_attempts`: 본인 select 정상, 다른 사용자는 0건
+  - `tutor_messages`: 본인 select 정상, 다른 사용자는 0건, **본인 insert는 42501로
+    차단**(insert GRANT를 의도적으로 안 줬으므로 정상 — 서버만 insert)
+  - `content_review_messages`: admin select 정상, 일반 사용자(student_teen)는 0건
+- 테스트 계정·데이터는 검증 직후 전부 삭제.
+
+### 의도적으로 제외한 것
+
+- 없음 — 이 메모리에 남아있던 GRANT 누락 항목을 전부 처리해서, 이 프로젝트에서 RLS가
+  걸린 테이블 중 GRANT가 안 맞는 곳이 더 이상 없음.
+
+(상세: [[project-rls-missing-grants-other-tables]])
+
+---
+
 ## 다음에 이어갈 것 (전부 대표님이 먼저 꺼낼 때 시작 — 2026-08-20 문서에서 이월)
 
 - Solapi 프로덕션 키 설정
@@ -143,5 +188,3 @@ Security) 이중 방어"로 막혀 있다고 명시하지만, 2026-08-20 점검(
 - Family → Premium/Free 요금제 티어 전환
 - `progress`/`saved_codes` 미사용 판단 로직의 실데이터 검증 (`examples` 테이블에 데이터가 생기면)
 - `already_member` 레이스 사용자 메시지 개선 (정확성 문제 아닌 UX nicety)
-- (신규) `learning_progress`/`tutor_messages`/`content_review_messages`의 `authenticated` GRANT
-  보완 — 이 테이블들에 실제 클라이언트 직접 접근(Realtime 등)이 필요해지면 그때 진행
