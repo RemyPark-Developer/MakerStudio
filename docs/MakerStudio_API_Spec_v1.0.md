@@ -104,6 +104,7 @@ MVP 범위(§ MVP문서 3항목표: "관리자 검수 — Should, 비-UI 가능"
 |---|---|---|---|
 | GET | `/api/notifications` | ✓ | 내 알림 목록 |
 | PATCH | `/api/notifications/:id/read` | ✓ | 읽음 처리 (본인 알림만) |
+| POST | `/api/notifications/waitlist` | ✕ | `/pricing` 페이지용(2026-08-22). `{email, marketingConsent?}` → `waitlist_emails`에 upsert. 로그인 불필요(비로그인 방문자가 주 대상), `marketingConsent`는 정보통신망법 제50조 별도 동의라 기본 `false` — 프론트엔드가 절대 사전 체크하지 않음(다크패턴 금지 원칙). 잘못된 이메일 형식만 `400`, 그 외엔 항상 `{ok:true}`(이메일 존재 여부를 노출하지 않는 원칙, `password/forgot`과 동일) |
 
 내부적으로 다른 도메인(billing/family)이 `lib/notifications/notify.ts`의 `notifyGuardian()`을 직접
 호출하면 이 도메인이 `notifications` row를 만들고 이메일(Resend)로도 발송을 시도합니다. 이 저장소엔

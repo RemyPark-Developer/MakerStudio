@@ -329,6 +329,22 @@ email만(`lib/notifications/notify.ts`의 `CHANNELS_BY_TYPE`). guardian 전화�
 submitter가 항상 admin이라 실질적 수신자 없음), 알림 on/off 설정 화면, SMS 발송 디바운스/합산,
 전화번호 소유 재인증, 발송 시도 정규화 테이블(`notification_deliveries`류).
 
+### `waitlist_emails` (`0034_waitlist_emails.sql`, 2026-08-22 `/pricing` 페이지용)
+
+`notifications`는 `user_id`가 필수 FK라 로그인 안 한 방문자의 이메일을 담을 수 없어서 별도
+테이블로 분리함. `/pricing` 하단 "출시 알림 신청"이 채운다.
+
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| id | uuid, PK | |
+| email | text, unique | 재제출은 에러가 아니라 `upsert(onConflict: email)`로 갱신 처리 |
+| marketing_consent | boolean, default false | 정보통신망법 제50조 마케팅 정보 수신 별도 동의 — **기본 미체크**(다크패턴 금지 원칙, 사용자가 명시적으로 체크해야만 true) |
+| created_at / updated_at | timestamptz | |
+
+**RLS/GRANT 없음** — `tutor_usage`/`wishlist_items`와 동일 패턴, service_role 전용
+(`app/api/notifications/waitlist/route.ts`만 접근). 클라이언트가 직접 조회/기록할 의도
+자체가 없음.
+
 ---
 
 ## 6. ERD 요약 (관계만)
