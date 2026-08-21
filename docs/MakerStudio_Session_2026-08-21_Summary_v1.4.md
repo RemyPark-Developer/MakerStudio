@@ -1,10 +1,11 @@
 # 2026-08-21 세션 요약 — 설계 판단과 구현 범위
 
-**버전**: v1.3 · **최종 수정**: 2026-08-21 · **짝 파일**: `MakerStudio_Auth_Flow_v1.0.md`, `MakerStudio_Session_2026-08-20_Summary_v1.1.md`
+**버전**: v1.4 · **최종 수정**: 2026-08-21 · **짝 파일**: `MakerStudio_Auth_Flow_v1.0.md`, `MakerStudio_Session_2026-08-20_Summary_v1.1.md`
 
 ### 개정 이력
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| v1.4 | 2026-08-21 | `content_modules` GRANT 보완(0029) 이어붙임 — content 도메인 테이블까지 전수 확인 마무리 |
 | v1.3 | 2026-08-21 | `pg_policies` 진단 RPC(0026) + `profiles`/`progress`/`saved_codes` 정책 드리프트 백필(0027) + `guardian_child_links` 정책 누락 버그 수정(0028) 이어붙임 |
 | v1.2 | 2026-08-21 | `learning_progress`/`quiz_attempts`/`tutor_messages`/`content_review_messages` GRANT 보완(0025) 이어붙임 — 남은 3곳 전부 한 번에 마무리, RLS GRANT 이슈 완전 종결 |
 | v1.1 | 2026-08-21 | `family_groups`/`family_group_members` GRANT 보완(0024) 이어붙임 — 대표님이 "이번 기회에 마저 고치자"고 해서 같은 날 추가 진행 |
@@ -22,6 +23,7 @@
 | 2 | `family_groups`/`family_group_members` GRANT 보완 | `247fb23` | `0024` |
 | 3 | 남은 4개 테이블 GRANT 보완 | `81d495d` | `0025` |
 | 4 | `pg_policies` 진단 RPC + 정책 드리프트 발견·수정 | `47636bc` | `0026`, `0027`, `0028` |
+| 5 | `content_modules`/`content_generation_log` GRANT 확인 | `3cbd5cd` | `0029` |
 
 ---
 
@@ -233,6 +235,46 @@ REST로 노출하지 않아 지금까지는 정책 존재 여부를 간접 실�
 - 없음.
 
 (상세: [[project-rls-policy-drift-profiles-guardian-links]])
+
+---
+
+## 5. `content_modules`/`content_generation_log` GRANT 확인
+
+**커밋**: `3cbd5cd`(0029)
+
+### 배경
+
+대표님이 content 도메인의 남은 두 테이블(`content_generation_log`, `content_modules`)도
+마저 확인해달라고 요청 — RLS/GRANT 전수 확인의 마지막 두 곳.
+
+### 핵심 설계 판단
+
+- **`content_generation_log`는 손대지 않음** — RLS도 정책도 원래 없고(관리자 전용 내부
+  진단 로그, 클라이언트 접근을 애초에 의도한 적이 없음), 지금까지 고쳐온 다른 테이블들과
+  달리 "정책은 있는데 GRANT가 없어서 막힌" 케이스가 아니라 "애초에 의도된 접근 경로 자체가
+  없는" 케이스 — 지금 상태(service_role 전용)가 정답.
+- **`content_modules`는 GRANT 보완**: `content_modules_public_read_published`
+  정책(0010)이 `status='published'`만 select 허용하는데 GRANT가 없어 막혀 있었음. 정책
+  주석이 명시한 "나중에 클라이언트 직접 조회 대비"라는 원래 설계 의도대로 `anon`+
+  `authenticated` 둘 다 GRANT.
+- **⚠️ 절대 원칙 2번(Premium 콘텐츠 SSG 금지) 관련 위험을 사전에 짚고 진행**: 지금은
+  `content_modules`에 `is_premium` 컬럼이 없어 안전하지만([[project-content-modules-premium-deferred]]),
+  나중에 그 컬럼이 추가되면서 이 RLS 정책(published 여부만 확인, premium 여부는 확인
+  안 함)을 같이 안 고치면 PostgREST 직접 접근으로 `code`/`explain`이 anon에게 그대로
+  노출되는 우회경로가 생김 — 대표님께 먼저 이 위험을 설명하고 승인받은 뒤 진행.
+
+### 검증 방법
+
+- anon key로 `content_modules` published 행 조회 → 정상 반환.
+- service_role로 `status: 'draft'` 테스트 행을 임시로 만들고 anon으로 조회 → **0건**(RLS가
+  정확히 필터링). `status=neq.published` 필터로도 0건 확인. 테스트 행은 즉시 삭제.
+
+### 의도적으로 제외한 것
+
+- `content_generation_log` GRANT 추가 — 원래부터 클라이언트 접근이 의도되지 않은
+  테이블이라 불필요.
+
+(상세: [[project-rls-missing-grants-other-tables]] §추가 2, [[project-content-modules-premium-deferred]])
 
 ---
 
