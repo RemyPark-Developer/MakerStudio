@@ -244,8 +244,8 @@
 - Solapi 프로덕션 키 설정
 - 구독/Family 만료 임박 알림 (cron 인프라 선결정 필요)
 - 콘텐츠 검수 승인/반려 알림 (비-admin 제출 플로우가 생기면)
-- `content_modules.is_premium` 컬럼 (DB 생성 콘텐츠도 프리미엄으로 팔아야 하는 요구사항이 생기면)
-- 회사 귀책 전액환불 자동 판별 (`payments.status`에 사유 플래그 추가하는 스키마 작업부터 필요)
+- ~~`content_modules.is_premium` 컬럼~~ — 2026-08-21 완료(`0030`), 별도 요약: `MakerStudio_Session_2026-08-21_Summary_v1.9.md` §「content_modules.is_premium 추가」
+- ~~회사 귀책 전액환불 자동 판별~~ — 2026-08-21 완료(`0031`), 별도 요약: `MakerStudio_Session_2026-08-21_Summary_v1.9.md` §「회사 귀책 전액환불」
 - Family → Premium/Free 요금제 티어 전환
 - `progress`/`saved_codes` 미사용 판단 로직의 실데이터 검증 (`examples` 테이블에 데이터가 생기면)
 - `already_member` 레이스 사용자 메시지 개선 (정확성 문제 아닌 UX nicety)

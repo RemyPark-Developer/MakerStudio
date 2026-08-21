@@ -3,14 +3,15 @@ import { getAuthedUser, requireGuardian } from "@/lib/supabase/auth-context";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { calculateProratedRefund, isWithinFullRefundWindow } from "@/lib/billing/refund";
 import { checkFamilyGroupUsedInPeriod } from "@/lib/billing/familyUsage";
+import { findCompanyFaultPayment } from "@/lib/billing/companyFaultRefund";
 import { PLAN_PRICES } from "@/lib/billing/plans";
 import { withErrorHandling } from "@/lib/api-error-handler";
 
 /**
- * ⚠️ 이 라우트는 "일할계산" 또는 "미사용 전액환불"만 계산한다. 회사 귀책(중복결제,
- * 시스템 오류 등)으로 인한 전액환불은 이 API가 다루지 않는다 — 지금처럼 CS/관리자가
- * 수동으로 처리한다(2026-08-20 Family 환불 정책 확정 시 명시적으로 범위에서 제외한
- * 결정). 이 응답만 보고 "회사귀책도 자동 처리되는 줄" 착각하지 말 것.
+ * "일할계산" · "미사용 전액환불" · "회사 귀책 전액환불"(payments.refund_reason, 0031)
+ * 세 가지를 계산한다. 회사 귀책 마킹은 CS/관리자가 SQL Editor로 payments row에 직접
+ * 세팅한다(세팅용 API/화면은 이번 범위 밖) — 세팅되면 기간·사용여부 계산을 건너뛰고
+ * 그 결제 건의 실제 결제금액을 그대로 전액환불한다.
  */
 export const POST = withErrorHandling(async (req: NextRequest) => {
   const user = await getAuthedUser(req);
@@ -41,6 +42,14 @@ export const POST = withErrorHandling(async (req: NextRequest) => {
 
     if (!familyGroup) {
       return NextResponse.json({ error: "not_found", message: "활성 구독이 없어요." }, { status: 404 });
+    }
+
+    const companyFaultPayment = await findCompanyFaultPayment(supabase, { familyGroupId: familyGroup.id });
+    if (companyFaultPayment) {
+      return NextResponse.json({
+        refundAmount: companyFaultPayment.amount,
+        reason: "company_fault",
+      });
     }
 
     const { data: members } = await supabase
@@ -79,7 +88,7 @@ export const POST = withErrorHandling(async (req: NextRequest) => {
   // family:true가 아니면 위 !childId && !family 가드를 통과했으므로 childId는 항상 있다.
   const { data: sub, error } = await supabase
     .from("subscriptions")
-    .select("plan, current_period_start, current_period_end")
+    .select("id, plan, current_period_start, current_period_end")
     .eq("guardian_id", user.id)
     .eq("child_id", childId)
     .eq("status", "active")
@@ -90,6 +99,14 @@ export const POST = withErrorHandling(async (req: NextRequest) => {
   }
   if (sub.plan === "free") {
     return NextResponse.json({ refundAmount: 0, message: "Free 플랜은 환불 대상이 아니에요." });
+  }
+
+  const companyFaultPayment = await findCompanyFaultPayment(supabase, { subscriptionId: sub.id });
+  if (companyFaultPayment) {
+    return NextResponse.json({
+      refundAmount: companyFaultPayment.amount,
+      reason: "company_fault",
+    });
   }
 
   const monthlyAmount = sub.plan === "premium" ? PLAN_PRICES.premium : 0;

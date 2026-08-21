@@ -1,10 +1,11 @@
 # 2026-08-21 세션 요약 — 설계 판단과 구현 범위
 
-**버전**: v1.8 · **최종 수정**: 2026-08-21 · **짝 파일**: `MakerStudio_Auth_Flow_v1.0.md`, `MakerStudio_Session_2026-08-20_Summary_v1.1.md`
+**버전**: v1.9 · **최종 수정**: 2026-08-21 · **짝 파일**: `MakerStudio_Auth_Flow_v1.0.md`, `MakerStudio_Session_2026-08-20_Summary_v1.1.md`
 
 ### 개정 이력
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| v1.9 | 2026-08-21 | 회사 귀책(중복결제·시스템오류) 전액환불 이어붙임 — 2026-08-20에 의도적으로 범위 제외했던 항목을 착수, `refund/calculate` 확장 |
 | v1.8 | 2026-08-21 | ⚠️ Supabase 싱글턴 세션오염 버그 발견·수정 이어붙임 — RGB LED UI 확인 중 우연히 발견한, 이 세션의 RLS 작업과 무관한 심각한 기존 버그 |
 | v1.7 | 2026-08-21 | `content_modules.is_premium` 추가 + 관리자 유료 설정 + RLS 동시 수정(0030) 이어붙임 — 2026-08-20에 보류했던 항목을 실제 요구사항이 생겨 완료 |
 | v1.6 | 2026-08-21 | `/mypage/billing` 실브라우저 UI 확인 이어붙임 — API 레벨 검증을 넘어 실제 화면 렌더링까지 확인 |
@@ -32,6 +33,7 @@
 | 7 | `/mypage/billing` 실브라우저 UI 확인 | (문서만) | 없음 |
 | 8 | `content_modules.is_premium` 추가 + 관리자 유료 설정 + RLS 동시 수정 | `5807660` | `0030` |
 | 9 | ⚠️ Supabase 싱글턴 세션오염 버그 발견·수정 | `fdc4622` | 없음(코드만) |
+| 10 | 회사 귀책 전액환불 (`payments.refund_reason`) | (미커밋) | `0031` |
 
 ---
 
@@ -504,12 +506,67 @@ SSG 금지) 관련 위험을 미리 알고 있었고("RLS 정책 수정 부분�
 
 ---
 
+## 10. 회사 귀책 전액환불 (`payments.refund_reason`)
+
+**커밋**: (미커밋 — 이번 세션 진행 중) · **마이그레이션**: `0031`(작성만, 적용은 대표님이 SQL Editor에서)
+
+### 배경
+
+2026-08-20 Family 환불 정책 확정(§9, 이전 문서) 당시 회사 귀책(중복결제·시스템오류)
+전액환불은 `payments.status`에 사유를 나타낼 플래그가 없어 자동 판별이 불가능하다는
+이유로 명시적으로 범위 제외됐었음(CS/관리자 수동 처리 유지). 대표님이 이번 세션에서
+그 스키마 공백을 채워달라고 요청해 착수.
+
+### 핵심 설계 판단
+
+- `payments.refund_reason`(text, nullable, `duplicate_payment` | `system_error`) 컬럼
+  추가(`0031`) — CS/관리자가 SQL Editor로 직접 세팅하는 걸 전제로 함(세팅용 admin
+  API/화면은 이번 범위 밖).
+- `lib/billing/companyFaultRefund.ts`의 `findCompanyFaultPayment()` — 해당 구독/family_group의
+  가장 최근 `status='success'` 결제 중 `refund_reason`이 채워진 게 있으면 그 결제의 실제
+  결제금액을 반환. `lib/billing/familyUsage.ts`와 같은 이유로(DB 조회가 핵심) 순수 함수가
+  아님.
+- `refund/calculate`에서 개인/Family 두 분기 모두, 기존 기간·사용여부 계산보다 **먼저**
+  이 체크를 수행 — 있으면 즉시 `{ refundAmount: payment.amount, reason: "company_fault" }`
+  반환하고 나머지 로직(7일 창, 일할계산)은 건너뜀. 회사 귀책은 요금제 구분과 무관한
+  사유라 개인 구독 경로도 이번에 같이 확장함(2026-08-20 Family 확장 때는 개인 경로를
+  안 건드렸던 것과 다른 점 — 이번 사유는 애초에 Family 전용이 아니었기 때문).
+- `payments`는 이미 `0022`에서 RLS+테이블 단위(`grant select on public.payments`) GRANT가
+  걸려 있어 컬럼 추가만으로 충분 — 컬럼을 명시한 GRANT가 아니었음을 직접 확인 후 진행.
+
+### 문서 동기화
+
+- `DB_Schema_v1.0.md` `payments` 표에 `refund_reason` 행 추가, 회사 귀책 환불 설명을
+  "다루지 않는다"에서 실제 동작으로 교체.
+- `MVP_Scope_v1.2.md` v1.8 — Won't 표에서 "회사 귀책 전액환불 자동화" 항목 제거, 요금제
+  Should 행 설명 갱신.
+- `Session_2026-08-20_Summary_v1.1.md` "다음에 이어갈 것"에서 완료 표시.
+
+### 검증 방법
+
+- **실DB 검증은 대표님이 `0031`을 SQL Editor에서 적용한 뒤에만 가능** — 이번 세션은
+  코드 레벨(로직 리뷰, 기존 `refund.test.ts` 회귀)까지만 확인. 마이그레이션 적용 후
+  실제 `payments` row에 `refund_reason`을 세팅해 API로 확인하는 건 다음 세션 과제.
+
+### 의도적으로 제외한 것
+
+- 회사 귀책 사유를 세팅하는 admin API/화면 — 이번 범위는 스키마+계산 로직까지만,
+  세팅은 여전히 SQL Editor 수동.
+- `refund_reason` 세팅 시 자동으로 실제 PG 환불(포트원 API 호출)까지 트리거하는 것 —
+  이 라우트는 원래부터 "계산"만 하고 실제 환불 처리(결제 취소)는 다루지 않음(라우트명
+  그대로 `refund/calculate`), 이번 확장도 그 경계를 유지.
+
+(상세: [[project-family-plan-followups]])
+
+---
+
 ## 다음에 이어갈 것 (전부 대표님이 먼저 꺼낼 때 시작 — 2026-08-20 문서에서 이월)
 
 - Solapi 프로덕션 키 설정
 - 구독/Family 만료 임박 알림 (cron 인프라 선결정 필요)
 - 콘텐츠 검수 승인/반려 알림 (비-admin 제출 플로우가 생기면)
-- 회사 귀책 전액환불 자동 판별 (`payments.status`에 사유 플래그 추가하는 스키마 작업부터 필요)
+- ~~회사 귀책 전액환불 자동 판별~~ — 2026-08-21 완료(위 §10, `0031`)
 - Family → Premium/Free 요금제 티어 전환
 - `progress`/`saved_codes` 미사용 판단 로직의 실데이터 검증 (`examples` 테이블에 데이터가 생기면)
 - `already_member` 레이스 사용자 메시지 개선 (정확성 문제 아닌 UX nicety)
+- 회사 귀책 사유(`refund_reason`)를 세팅하는 admin API/화면 (지금은 SQL Editor 수동)

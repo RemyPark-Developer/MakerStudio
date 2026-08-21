@@ -113,9 +113,12 @@ Family 요금제(₩19,900/월, 최대 3명) 구독 그룹. **`guardian_child_li
 `learning_progress`/`quiz_attempts`/`tutor_messages`/`progress`/`saved_codes` **5개 테이블
 전부**에 활동이 없으면 전액환불(`lib/billing/familyUsage.ts`의 `checkFamilyGroupUsedInPeriod()`),
 그 외엔 `calculateProratedRefund()`로 일할계산 — 개인 구독과 같은 함수를 그대로 재사용함.
-**⚠️ 회사 귀책(중복결제·시스템 오류) 전액환불은 이 API가 다루지 않는다** — `payments.status`에
-그런 사유를 나타낼 플래그 자체가 없고, 지금처럼 CS/관리자가 수동으로 처리하는 것으로 의도적
-결정(2026-08-20). 개인 구독 경로는 이번 확장에서 전혀 안 건드림.
+**회사 귀책(중복결제·시스템 오류) 전액환불(2026-08-21, 0031)**: `payments.refund_reason`에
+CS/관리자가 사유를 수동으로 세팅(`duplicate_payment` | `system_error`)하면, `refund/calculate`가
+기간·사용여부 계산을 건너뛰고 그 결제 건의 실제 결제금액을 그대로 전액환불한다
+(`lib/billing/companyFaultRefund.ts`의 `findCompanyFaultPayment()`). 개인 구독·Family 둘 다
+적용 — 회사 귀책은 요금제 구분과 무관한 사유이기 때문. 세팅용 admin API/화면은 이번 범위 밖
+(SQL Editor로 직접 UPDATE).
 
 ### `payments`
 | 컬럼 | 타입 | 설명 |
@@ -127,6 +130,7 @@ Family 요금제(₩19,900/월, 최대 3명) 구독 그룹. **`guardian_child_li
 | status | text | `success` \| `failed` \| `refunded` |
 | pg_transaction_id | text | 포트원 거래 ID |
 | paid_at | timestamptz | |
+| refund_reason | text, nullable(0031) | `duplicate_payment` \| `system_error` \| null. 채워지면 회사 귀책 전액환불 대상 |
 
 **제약(0015)**: `subscription_id`와 `family_group_id`는 배타적 — 정확히 하나만 채워져야 한다
 (`payments_subscription_or_family_group` check 제약). `activateFamilyGroup()`이 이제
