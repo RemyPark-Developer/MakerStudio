@@ -1,10 +1,11 @@
 # 2026-08-21 세션 요약 — 설계 판단과 구현 범위
 
-**버전**: v1.0 · **최종 수정**: 2026-08-21 · **짝 파일**: `MakerStudio_Auth_Flow_v1.0.md`, `MakerStudio_Session_2026-08-20_Summary_v1.1.md`
+**버전**: v1.1 · **최종 수정**: 2026-08-21 · **짝 파일**: `MakerStudio_Auth_Flow_v1.0.md`, `MakerStudio_Session_2026-08-20_Summary_v1.1.md`
 
 ### 개정 이력
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| v1.1 | 2026-08-21 | `family_groups`/`family_group_members` GRANT 보완(0024) 이어붙임 — 대표님이 "이번 기회에 마저 고치자"고 해서 같은 날 추가 진행 |
 | v1.0 | 2026-08-21 | 최초 작성 — `payments`/`subscriptions`/`notifications` RLS 구현 1건 |
 
 이 문서는 커밋으로만 남아있는 하루치 작업의 "왜"를 한 곳에 모은 기록이다. 전날(2026-08-20)
@@ -16,6 +17,7 @@
 | 순서 | 작업 | 커밋 | 마이그레이션 |
 |---|---|---|---|
 | 1 | `payments`/`subscriptions`/`notifications` RLS 구현 | `8c9d32f` | `0022`, `0023` |
+| 2 | `family_groups`/`family_group_members` GRANT 보완 | `247fb23` | `0024` |
 
 ---
 
@@ -91,6 +93,43 @@ Security) 이중 방어"로 막혀 있다고 명시하지만, 2026-08-20 점검(
   [[project-rls-missing-grants-other-tables]]).
 
 (상세: [[project-rls-gap-billing-tables]])
+
+---
+
+## 2. `family_groups`/`family_group_members` GRANT 보완
+
+**커밋**: `247fb23`(0024)
+
+### 배경
+
+1번 항목 작업 중 `family_groups`도 같은 GRANT 부재 문제로 (0023에서) 고쳤던 걸 계기로,
+대표님이 "이번 기회에 `family_groups`도 GRANT 보완할까"라고 먼저 제안. 확인해보니
+`family_groups`는 이미 0023에서 해결돼 있었고, `family_group_members`만 아직 GRANT가
+없는 상태였음(0014에 RLS+정책은 있지만).
+
+### 핵심 설계 판단
+
+- `family_group_members_owner_select` 정책(0014)은 그대로 두고 `grant select on
+  public.family_group_members to authenticated;` 한 줄만 추가 — 새 정책을 만드는 게
+  아니라 이미 있던 정책이 실제로 작동하게 만드는 것.
+
+### 검증 방법
+
+- owner/다른 guardian/student_child 3개 임시 계정 생성 → 실제 `family_group_members` row
+  하나 만들고(guardian 소유 family_group + 자녀 1명) 각 토큰으로 조회:
+  - owner 본인 토큰 → 1건 (본인 그룹 멤버)
+  - 다른 guardian 토큰 → 0건
+  - student_child 토큰 → 0건 (이 테이블엔 애초에 child용 정책이 없음)
+  - `family_groups` 자체도 재확인 → 1건(0023 GRANT가 여전히 정상 동작)
+- 테스트 계정·데이터는 검증 직후 전부 삭제.
+
+### 의도적으로 제외한 것
+
+- `learning_progress`/`tutor_messages`/`content_review_messages`의 같은 문제 — 대표님이
+  이번엔 `family_groups` 계열만 지목함, 나머지는 여전히 무해한 채로 보류(→
+  [[project-rls-missing-grants-other-tables]]).
+
+(상세: [[project-rls-missing-grants-other-tables]])
 
 ---
 
