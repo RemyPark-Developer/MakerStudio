@@ -1,10 +1,11 @@
 # 2026-08-21 세션 요약 — 설계 판단과 구현 범위
 
-**버전**: v1.4 · **최종 수정**: 2026-08-21 · **짝 파일**: `MakerStudio_Auth_Flow_v1.0.md`, `MakerStudio_Session_2026-08-20_Summary_v1.1.md`
+**버전**: v1.5 · **최종 수정**: 2026-08-21 · **짝 파일**: `MakerStudio_Auth_Flow_v1.0.md`, `MakerStudio_Session_2026-08-20_Summary_v1.1.md`
 
 ### 개정 이력
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| v1.5 | 2026-08-21 | 남은 4개 테이블(`examples`/`password_reset_tokens`/`tutor_usage`/`wishlist_items`) 확인으로 실DB 19개 테이블 전수 완료 — 새 마이그레이션 없음(전부 정상 상태였음) |
 | v1.4 | 2026-08-21 | `content_modules` GRANT 보완(0029) 이어붙임 — content 도메인 테이블까지 전수 확인 마무리 |
 | v1.3 | 2026-08-21 | `pg_policies` 진단 RPC(0026) + `profiles`/`progress`/`saved_codes` 정책 드리프트 백필(0027) + `guardian_child_links` 정책 누락 버그 수정(0028) 이어붙임 |
 | v1.2 | 2026-08-21 | `learning_progress`/`quiz_attempts`/`tutor_messages`/`content_review_messages` GRANT 보완(0025) 이어붙임 — 남은 3곳 전부 한 번에 마무리, RLS GRANT 이슈 완전 종결 |
@@ -24,6 +25,7 @@
 | 3 | 남은 4개 테이블 GRANT 보완 | `81d495d` | `0025` |
 | 4 | `pg_policies` 진단 RPC + 정책 드리프트 발견·수정 | `47636bc` | `0026`, `0027`, `0028` |
 | 5 | `content_modules`/`content_generation_log` GRANT 확인 | `3cbd5cd` | `0029` |
+| 6 | 남은 4개 테이블 확인 — 실DB 19개 테이블 전수 완료 | (문서만) | 없음 |
 
 ---
 
@@ -275,6 +277,43 @@ REST로 노출하지 않아 지금까지는 정책 존재 여부를 간접 실�
   테이블이라 불필요.
 
 (상세: [[project-rls-missing-grants-other-tables]] §추가 2, [[project-content-modules-premium-deferred]])
+
+---
+
+## 6. 남은 4개 테이블 확인 — 실DB 19개 테이블 전수 완료
+
+**커밋**: 없음(코드/마이그레이션 변경 없음, 이 문서와 메모리만 갱신)
+
+### 배경
+
+대표님이 "나머지 테이블들도 다 확인한 거 맞지?"라고 재확인 요청. 그때까지 5번 항목까지
+14개 테이블을 다뤘는데, 실DB 전체 19개 중 `examples`/`password_reset_tokens`/
+`tutor_usage`/`wishlist_items` 4개를 아직 명시적으로 확인 안 한 상태였음.
+
+### 검증 방법
+
+- anon key + 실제 authenticated JWT 양쪽으로 4개 테이블 전부 직접 조회 시도 → **전부
+  42501**(GRANT 없음).
+- `debug_list_policies()`로 19개 테이블 전체를 한 번에 대조 → 이 4개(+`content_generation_log`)
+  는 정책 0건, 나머지 14개는 정책 있음 — 정확히 예상한 대로.
+
+### 핵심 판단
+
+- **4개 다 손댈 필요 없음** — `0001_init.sql` 코멘트를 봐도 client 직접 접근을 의도한
+  적이 없는 테이블들(`examples`는 API 레이어 게이팅 전제, `password_reset_tokens`는
+  보안 토큰이라 애초에 노출되면 안 됨, `tutor_usage`/`wishlist_items`는 서버 전용
+  집계·목록). `content_modules`처럼 "나중에 클라이언트 직접 조회 대비"라는 코멘트가
+  없다는 게 결정적 차이.
+- **`examples`가 특히 중요**: `is_premium` 필드를 이미 갖고 있어 절대 원칙 2번과 직결되는
+  테이블인데, GRANT가 아예 없어 완전히 막혀 있는 것까지 확인 — 지금은 이 경로로 premium
+  콘텐츠가 우회 노출될 위험이 없음.
+
+### 결론
+
+**이 프로젝트의 실DB 19개 테이블 전수 확인 완료** — 14개(정책+GRANT 정상화), 5개
+(`content_generation_log` 포함, 정책 없음=정상). 더 이상 확인이 필요한 테이블 없음.
+
+(상세: [[project-rls-missing-grants-other-tables]] 최종 결론)
 
 ---
 
