@@ -36,8 +36,11 @@ export async function gateExample(
  * ⚠️ 실패 시 항상 false(=잠금)를 반환한다 — "확인 안 되면 열어준다"가 아니라
  * "확인 안 되면 잠근다"가 원칙. Supabase가 아직 연결 안 된 지금 상태에서도
  * 이 함수는 항상 false를 반환하므로 Premium 콘텐츠는 항상 잠긴 채로 안전하게 동작한다.
+ *
+ * export됨(2026-08-22) — scripts/purge-expired-data.ts가 "이 아이가 지금 다른 경로로
+ * 활성 접근권이 있는지"(개인 premium/premium_vip + Family) 재확인하는 안전장치로 재사용.
  */
-async function hasPremiumAccess(user: AuthedUser | null): Promise<boolean> {
+export async function hasPremiumAccess(user: AuthedUser | null): Promise<boolean> {
   if (!user) return false;
 
   try {

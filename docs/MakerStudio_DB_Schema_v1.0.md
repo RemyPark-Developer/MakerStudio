@@ -64,6 +64,7 @@ Supabase는 이메일·비밀번호·소셜 로그인을 처리하는 `auth.user
 | current_period_start | timestamptz | |
 | current_period_end | timestamptz | 해지해도 이 시점까지 유지(§4.3) |
 | canceled_at | timestamptz, nullable | |
+| data_retention_until | timestamptz, nullable(2026-08-22, 0036) | 해지 후 30일 데이터 보관 만료 시점(`current_period_end`+30일 — `canceled_at` 아님, §4.3 원칙과 일관). null이면 보관 대상 아님(활성이거나 재구독함). **실제 자동 파기는 아직 없음** — `scripts/purge-expired-data.ts` 수동 실행 전까지 아무 일도 안 일어남. ⚠️ 정책·문구는 초안, 법률 검토 필요 |
 
 ### `family_groups` / `family_group_members` (2026-08-20 추가, MVP_Scope v1.3)
 Family 요금제(₩19,900/월, 최대 3명) 구독 그룹. **`guardian_child_links`(§1)와는 별개의 개념**이다 —
@@ -81,7 +82,7 @@ Family 요금제(₩19,900/월, 최대 3명) 구독 그룹. **`guardian_child_li
 
 | 테이블 | 컬럼 | 설명 |
 |---|---|---|
-| `family_groups` | id, owner_id(FK→profiles.id, unique), plan_tier, seat_limit(기본 3, 좌석 추가로 최대 6 — 0021), status(`active`\|`canceled`), current_period_start/end, canceled_at, created_at, updated_at | 보호자당 1개. `owner_id` unique라서 결제 검증(verify)과 웹훅이 같은 결제를 중복 처리해도 자연히 멱등적 |
+| `family_groups` | id, owner_id(FK→profiles.id, unique), plan_tier, seat_limit(기본 3, 좌석 추가로 최대 6 — 0021), status(`active`\|`canceled`), current_period_start/end, canceled_at, data_retention_until(2026-08-22, 0036 — `subscriptions`와 동일 원칙), created_at, updated_at | 보호자당 1개. `owner_id` unique라서 결제 검증(verify)과 웹훅이 같은 결제를 중복 처리해도 자연히 멱등적 |
 | `family_group_members` | family_group_id(FK), child_id(FK→profiles.id, unique), added_at | 한 아이는 동시에 하나의 family_group에만 속함 |
 
 **`subscriptions`와는 분리되어 있다** — Family 요금제는 `subscriptions` row를 만들지 않는다.
@@ -168,6 +169,34 @@ admin 권한 확인 후 service_role로만 조회한다. **⚠️ `authenticated
 대조해보면 뷰의 SQL 로직 자체는 정확하고 infra 레벨의 짧은 propagation lag로 판단됨 — 몇 초
 뒤 재조회하면 항상 정확한 값으로 안정화됐고, 실사용 시나리오(해지와 대시보드 조회가 분·시간
 단위로 떨어져 일어남)엔 영향이 없음.
+
+### 해지 후 30일 데이터 보관 정책 — 준비 단계 (2026-08-22, `0036_data_retention.sql`)
+
+**⚠️ 이 정책의 법적 고지 문구·30일이라는 기간은 초안이며 실제 법률 검토가 필요하다**
+(`docs/MakerStudio_Privacy_Policy_DRAFT_addendum_v0.1.md` 참고). 개인정보보호법 제21조상
+"계약종료"(구독 해지) 시점엔 원칙적으로 개인정보를 지체없이 파기해야 하는데, 실수 해지
+방지를 위해 30일 유예를 두려면 ①사전 고지 ②실제 파기 실행이 필요하다. cron 인프라가
+없어 ②는 이번 범위 밖 — **지금은 아무것도 자동으로 삭제되지 않는다.**
+
+- `subscriptions`/`family_groups`에 `data_retention_until` 추가(위 §2 각 테이블 참고).
+  `subscription/cancel`/`family/cancel`이 해지 시점에 `current_period_end`(해지 버튼을
+  누른 시점인 `canceled_at`이 아니라 — §4.3 "해지해도 잔여기간까지는 이용 가능" 원칙과
+  일관되게 실제 접근이 끊기는 시점 기준) + 30일로 계산해서 채운다
+  (`lib/billing/dataRetention.ts`의 `calculateRetentionUntil()`).
+- 재구독하면(`activateSubscription()`/`activateFamilyGroup()`) `data_retention_until`을
+  다시 `null`로 되돌린다 — 별도 "복원" 로직 없이, 파기 스크립트가 이 값이 지난 것만
+  대상으로 삼기 때문에 자동으로 대상에서 빠진다.
+- **파기 대상 데이터(`lib/billing/dataRetention.ts`의 `LEARNING_DATA_TABLES`)**: Family
+  환불 정책(2026-08-20)에서 이미 "이용 내역"으로 확정한 5개 테이블(`learning_progress`,
+  `quiz_attempts`, `tutor_messages`, `progress`, `saved_codes`) + VIP 멘토링
+  (`vip_mentor_requests`, 2026-08-21) — 같은 개념을 두 번 다르게 정의하지 않기 위해
+  기존 정의를 그대로 재사용.
+- **`scripts/purge-expired-data.ts`**(관리자 수동 실행, 기본 dry-run) — `data_retention_until`이
+  지난 대상을 찾은 뒤, `lib/content/gate.ts`의 `hasPremiumAccess()`(2026-08-22 export됨)로
+  "지금 다른 경로로 활성 접근권이 있는지"(예: Family는 해지했지만 개인 Premium/VIP가
+  별도로 살아있는 경우) 다시 확인해서 있으면 제외하는 안전장치를 둔다. `--confirm` 없이
+  실행하면 대상 목록만 출력하고 아무것도 안 지운다. **cron 등 스케줄러에는 아직 연결
+  안 됨** — 인프라가 결정되면 이 스크립트 경로를 그대로 스케줄링에 넣으면 된다.
 
 ---
 

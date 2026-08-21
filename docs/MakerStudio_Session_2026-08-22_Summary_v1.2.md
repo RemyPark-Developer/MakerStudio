@@ -1,10 +1,11 @@
 # 2026-08-22 세션 요약 — 설계 판단과 구현 범위
 
-**버전**: v1.1 · **최종 수정**: 2026-08-22 · **짝 파일**: `MakerStudio_DB_Schema_v1.0.md`, `MakerStudio_Session_2026-08-21_Summary_v1.11.md`
+**버전**: v1.2 · **최종 수정**: 2026-08-22 · **짝 파일**: `MakerStudio_DB_Schema_v1.0.md`, `MakerStudio_Session_2026-08-21_Summary_v1.11.md`
 
 ### 개정 이력
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| v1.2 | 2026-08-22 | 해지 후 30일 데이터 보관 정책(준비 단계) 이어붙임 — 스키마+수동 파기 스크립트+법적 고지 문구 초안. PDF 포트폴리오는 별도 작업으로 분리 |
 | v1.1 | 2026-08-22 | Premium VIP 요금제(월 ₩100,000, AI초안+admin승인 비동기 멘토링) 이어붙임 — 5단계로 나눠 진행, 실증 검증까지 완료 |
 | v1.0 | 2026-08-22 | 최초 작성 — 가격 정책 페이지(`/pricing`) 신설 |
 
@@ -17,6 +18,7 @@
 |---|---|---|---|
 | 1 | 가격 정책 페이지 (`/pricing`) | `6c8864d` | `0034` |
 | 2 | Premium VIP 요금제 (AI초안+admin승인 비동기 멘토링) | `d20ec37` | `0035` |
+| 3 | 해지 후 30일 데이터 보관 정책 (준비 단계) | (미커밋) | `0036` |
 
 ---
 
@@ -209,6 +211,108 @@ admin 1)으로 총 22개 체크 전부 통과:
   남겨뒀지만 화면/API에서 실제로 쓰지 않음, 필요해지면 나중에.
 
 (상세: [[project-vip-mentor-program]])
+
+---
+
+## 3. 해지 후 30일 데이터 보관 정책 (준비 단계)
+
+**커밋**: (미커밋 — 이번 세션 진행 중) · **마이그레이션**: `0036`(작성만, 적용은 대표님이 SQL Editor에서)
+
+### 배경
+
+개인정보보호법 제21조상 "계약종료"(구독 해지) 시점엔 개인정보를 원칙적으로 지체없이
+파기해야 하는데, 실수 해지 방지를 위해 30일 유예를 두려면 ①사전 고지 ②실제 파기 실행이
+필요하다. cron 인프라가 없어 ②는 이번 범위 밖 — **지금은 아무것도 자동으로 삭제되지
+않는다**(기존 코드에도 해지 후 학습 데이터를 지우는 로직 자체가 없었음을 확인).
+
+### 조사 중 확인한 것
+
+- **개인정보처리방침 문서/페이지가 이 저장소에 없었다** — `app/page.tsx`의
+  "개인정보처리방침"은 링크조차 아닌 순수 텍스트, `Project_Design_v2.4.md` §13도
+  "실제 문서 없음(원칙만 정의됨)"이라고 명시. 완전한 정책을 이번에 새로 지어내는 대신
+  **이 조항 하나만 다루는 초안 addendum**(`docs/MakerStudio_Privacy_Policy_DRAFT_addendum_v0.1.md`)
+  을 만들고 아직 공개 페이지엔 노출하지 않기로 함.
+- **요구사항 6(해지 시 PDF 포트폴리오 다운로드)의 "§7.5 재사용" 전제가 실제와 다름** —
+  이 저장소엔 PDF 생성 코드/라이브러리/폰트가 전혀 없음(§7.5는 설계 문서의 스펙일 뿐,
+  실제 구현·샘플은 이 저장소 밖에서만 검증됨 — `makerstudio-prototype.html`이 없었던
+  것과 같은 종류의 간극, `MVP_Scope_v1.2.md`에도 이미 "PDF 워크북/수료증 — 샘플만
+  있음(§7.5), 화면 연동 안 함"으로 같은 사실이 기록돼 있었음). 대표님과 상의 후 이번
+  범위에서 제외, 별도 작업으로 분리.
+- **"canceled_at + 30일" 문자 그대로 쓰면 §4.3 원칙과 부딪힘** — 해지해도 결제기간
+  종료일까지는 이용 가능한데 `canceled_at`부터 30일을 세면, 결제주기가 많이 남은
+  상태에서 해지한 사람은 실제 접근을 잃는 시점부터 겨우 며칠 뒤에 데이터가 삭제
+  대상이 될 수 있음 — "실수 해지 방지"라는 목적과 안 맞아서 **`current_period_end`
+  (실제 접근이 끊기는 시점) + 30일**로 계산하도록 제안·반영.
+
+### 핵심 설계 판단
+
+- 컬럼 계산은 트리거가 아니라 애플리케이션 로직(`subscription/cancel`, `family/cancel`)
+  으로 — 이 저장소는 DB 트리거를 최소한만 쓰는 컨벤션(0003 프로필 자동생성 정도)이라
+  일관성 유지.
+- 재구독하면(`activateSubscription()`/`activateFamilyGroup()`) `data_retention_until`을
+  다시 `null`로 초기화 — 파기 스크립트가 이 값이 지난 것만 대상으로 삼으므로 자동으로
+  대상에서 빠짐, 별도 "복원" 로직 불필요.
+- "학습 데이터" 범위는 새로 정의하지 않고 Family 환불 정책(2026-08-20)에서 이미 확정한
+  5개 테이블 + VIP 멘토링(`vip_mentor_requests`)을 그대로 재사용
+  (`lib/billing/dataRetention.ts`의 `LEARNING_DATA_TABLES`) — 같은 개념을 두 번 다르게
+  정의하지 않기 위함.
+- `scripts/purge-expired-data.ts`는 기본이 dry-run(`--confirm` 있어야 실제 삭제) —
+  실제 개인정보를 지우는 스크립트라 안전장치를 기본값으로 둠. 대상 판정 시
+  `lib/content/gate.ts`의 `hasPremiumAccess()`(이번에 export로 전환)를 재사용해 "지금
+  다른 경로로 활성 접근권이 있는지" 한 번 더 확인 — 있으면 제외.
+- `hasPremiumAccess()`를 export한 것 외엔 기존 게이팅 로직 자체는 안 건드림(어제 §12에서
+  이미 `premium_vip`까지 포함하도록 확장 완료된 상태 그대로 재사용).
+
+### 문서 동기화
+
+- `DB_Schema_v1.0.md` — `subscriptions`/`family_groups` 컬럼 설명에 `data_retention_until`
+  추가 + §2에 정책 전용 하위 섹션 신설.
+- `API_Spec_v1.0.md` — `subscription/cancel`/`family/cancel` 행에 이번 변경 반영.
+- `MVP_Scope_v1.2.md` v1.12 — 신규 changelog 행 + Won't 표에 "해지 후 자동 파기(cron)"·
+  "PDF 포트폴리오" 2건 추가(이미 있던 "PDF 워크북/수료증" 행과 같은 근본 원인이라는 것도
+  명시).
+- `docs/MakerStudio_Privacy_Policy_DRAFT_addendum_v0.1.md`(신규) — 조항 초안 + "법률 검토
+  전 대외 공개 금지" 명시 + 법률 검토 시 확인이 필요한 지점 메모.
+- project 메모리에도 "이 정책의 법적 문구·기준은 초안, 확정 아님" 기록(다음 세션이
+  이미 확정된 것으로 오해하지 않도록).
+
+### 검증 방법 — 대표님이 `0036`을 SQL Editor에서 적용한 뒤 실DB로 전 구간 실증 완료
+
+- `calculateRetentionUntil()` 단위테스트 5개(월/연도 경계값, 순수 함수 여부 등) 신규
+  추가 — `npm test` 58개 전부 통과(기존 53 + 신규 5), `tsc --noEmit` 신규 에러 없음.
+- 실제 `POST /api/billing/subscription/cancel`/`family/cancel` 호출 → `data_retention_until`이
+  `current_period_end + 30일`로 정확히 찍히는지 확인(개인/Family 둘 다) → `activateSubscription()`을
+  실제로 호출해 재구독 시뮬레이션 → `canceled_at`/`data_retention_until` 둘 다 `null`로
+  정확히 초기화되고 `status`가 `active`로 돌아오는 것까지 확인.
+- `purge-expired-data.ts`를 3가지 케이스로 실제 검증: (1) 보관 기한이 지났고 다른
+  접근권도 없는 아이 → 파기 대상으로 정확히 잡힘 (2) 보관 기한이 아직 안 지난 아이 →
+  후보 쿼리에조차 안 잡힘 (3) **Family는 해지했지만 개인 Premium 구독이 별도로 살아있는
+  아이** → `hasPremiumAccess()` 안전장치가 정확히 "제외됨" 목록으로 걸러냄. dry-run으로
+  먼저 확인(아무것도 안 지워짐) → `--confirm`으로 실제 `learning_progress`에서만 1건
+  삭제되는 것까지 확인 → 재실행해도 이미 지워진 건 다시 안 잡히는(idempotent) 것도 확인.
+- **검증 중 발견한 것(전부 스크립트 버그, 앱 결함 아님)**: ① `subscriptions`에
+  `(guardian_id, child_id)` unique 제약이 있어(`0005_subscriptions_unique.sql`) 한
+  아이가 구독 행을 2개 동시에 가질 수 없다는 걸 처음엔 놓쳐서 "다른 접근권" 시나리오를
+  잘못 설계했었음(개인 구독 2개로 시도 → unique violation) — Family 해지+개인 구독
+  별도 유지 조합으로 다시 설계해서 실제 안전장치 코드 경로를 정확히 태움. ②
+  `family_group_members`가 `(family_group_id, child_id)` 복합 PK라 별도 `id` 컬럼이
+  없다는 걸 몰라서 `.select("id")`가 에러를 냄. ③ 재구독 테스트가 실제 `payments` 행을
+  만드는데(`activateSubscription()`의 정상 동작) `payments`는 §4.5 보존 원칙상 cascade
+  delete가 없어서, 검증 스크립트의 정리(cleanup) 순서가 꼬여 임시 계정 3쌍이 처음엔
+  안 지워짐 — `payments`→`subscriptions`→`auth.users` 순으로 직접 지워서 해결.
+- 임시 계정·구독·Family 그룹·학습 데이터는 검증 직후 전부 정리 확인(baseline과 정확히
+  같은 카운트로 복귀 — `learning_progress`에 남아있던 1건은 2026-08-19 날짜의 무관한
+  기존 데이터였음을 확인, 손대지 않음).
+
+### 의도적으로 제외한 것
+
+- 실제 자동 파기(cron) — 인프라 미결정, 대표님이 명시적으로 이번 범위 밖으로 지정.
+- 해지 시 PDF 학습 포트폴리오 다운로드 — 위 참고, 별도 작업.
+- 자녀 개별 제거(Family 멤버십에서만 빼는 것)에 대한 보관 정책 — 이번 요구사항은
+  "구독/Family 전체 해지"만 대상으로 명시됐고, 개별 멤버 제거는 다른 시나리오라 범위 밖.
+- 개인정보처리방침 전체 문서화 — 이 조항 하나만 초안으로 준비, 전체 정책은 별도 작업.
+
+(상세: [[project-data-retention-policy]])
 
 ---
 

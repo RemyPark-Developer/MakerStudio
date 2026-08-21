@@ -3,6 +3,7 @@ import { getAuthedUser, requireGuardian } from "@/lib/supabase/auth-context";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { withErrorHandling } from "@/lib/api-error-handler";
 import { notifyGuardian } from "@/lib/notifications/notify";
+import { calculateRetentionUntil } from "@/lib/billing/dataRetention";
 
 /**
  * §4.3: 해지해도 즉시 끊지 않고 현재 결제주기 종료일까지는 그대로 이용 가능.
@@ -20,9 +21,25 @@ export const POST = withErrorHandling(async (req: NextRequest) => {
   }
 
   const supabase = getSupabaseServerClient();
+
+  // 해지 후 30일 데이터 보관 정책(준비 단계, 2026-08-22 0036) — 실제 파기는 아직 자동
+  // 실행 안 됨(scripts/purge-expired-data.ts 수동 실행 전까지 아무 일도 안 일어남).
+  // ⚠️ 이 정책의 법적 고지 문구·기간은 초안이며 실제 법률 검토가 필요하다.
+  const { data: currentSub } = await supabase
+    .from("subscriptions")
+    .select("current_period_end")
+    .eq("guardian_id", user.id)
+    .eq("child_id", childId)
+    .eq("status", "active")
+    .maybeSingle();
+
+  const dataRetentionUntil = currentSub
+    ? calculateRetentionUntil(new Date(currentSub.current_period_end)).toISOString()
+    : null;
+
   const { data, error } = await supabase
     .from("subscriptions")
-    .update({ status: "canceled", canceled_at: new Date().toISOString() })
+    .update({ status: "canceled", canceled_at: new Date().toISOString(), data_retention_until: dataRetentionUntil })
     .eq("guardian_id", user.id)
     .eq("child_id", childId)
     .eq("status", "active")

@@ -197,6 +197,12 @@ function ChildSignupForm({ onDone }: { onDone: () => void }) {
         <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} style={{ width: "auto" }} />
         (법정대리인 확인) 만 14세 미만 아동의 개인정보 수집·이용에 동의합니다.
       </label>
+      {/* 해지 후 30일 데이터 보관 정책 고지(준비 단계, 2026-08-22 0036) —
+          ⚠️ 이 문구는 초안이며 실제 법률 검토가 필요하다. */}
+      <p className="formNote" style={{ marginTop: 8 }}>
+        구독을 해지하시면 30일간 학습 데이터가 보관되며, 재구독 시 복원됩니다. 실수로
+        해지한 경우에도 서비스 연속성을 보장하기 위함이에요.
+      </p>
       {error && <p className="formError">{error}</p>}
       <button type="submit" disabled={loading} className="btn btnCoral fullBtn">
         {loading ? "확인 중..." : "인증 완료"}

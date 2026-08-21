@@ -48,6 +48,8 @@ export async function activateFamilyGroup(input: ActivateFamilyGroupInput): Prom
         current_period_start: now.toISOString(),
         current_period_end: periodEnd.toISOString(),
         canceled_at: null,
+        // 재구독 = 해지 후 30일 데이터 보관 대상에서 제외(0036) — activateSubscription.ts와 동일 원칙.
+        data_retention_until: null,
         updated_at: now.toISOString(),
       },
       { onConflict: "owner_id" }

@@ -47,6 +47,10 @@ export async function activateSubscription(input: ActivateSubscriptionInput): Pr
         current_period_start: now.toISOString(),
         current_period_end: periodEnd.toISOString(),
         canceled_at: null,
+        // 재구독 = 해지 후 30일 데이터 보관 대상에서 제외(0036). purge-expired-data.ts는
+        // data_retention_until이 지난 것만 대상으로 삼으므로, null로 되돌리면 자동으로
+        // 대상에서 빠진다 — 별도 "복원" 로직 불필요.
+        data_retention_until: null,
       },
       { onConflict: "guardian_id,child_id" }
     )
