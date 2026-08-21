@@ -1,6 +1,6 @@
 # MakerStudio 인증/인가 상세 플로우 (MVP 범위)
 
-**버전**: v1.0 · **작성일**: 2026-08-13
+**버전**: v1.1 · **작성일**: 2026-08-13 · **최종 수정**: 2026-08-21(§3 RLS 실제 구현 반영)
 **짝 파일**: `MakerStudio_API_Spec_v1.0.md` · `MakerStudio_DB_Schema_v1.0.md`
 
 ## 0. 이 문서의 목적
@@ -108,6 +108,8 @@ API 명세서의 `identity` 엔드포인트들이 **정확히 어떤 순서로, 
 
 **두 층을 다 두는 이유**: API 미들웨어만 있으면 개발자의 실수(체크 로직 누락)로 뚫릴 수 있습니다. RLS까지 있으면 API 코드에 버그가 있어도 DB 자체가 막아줍니다 — 아동 결제 방지처럼 절대 뚫리면 안 되는 규칙은 반드시 이중으로 겁니다.
 
+**2026-08-21 실제 구현 완료 및 구현 중 발견한 사실**: 이 문서가 설명하는 이중 방어 중 RLS 레이어는 작성 시점(2026-08-13)엔 설계만 있고 실제 DB엔 없었습니다 — `payments`/`subscriptions`/`notifications`/`family_groups`/`family_group_members`/`learning_progress`/`quiz_attempts`/`tutor_messages`/`content_review_messages` 전 테이블에 실제로 RLS를 붙이고 실증 검증까지 마쳤습니다(`supabase/migrations/0022`~`0025`). 구현 중, **RLS 정책만으로는 충분하지 않다는 것**도 실DB 테스트로 드러났습니다 — 이 Supabase 프로젝트는 `anon`/`authenticated` 롤에 대한 기본 테이블 GRANT 자체가 없어서(SQL Editor로 테이블을 직접 만들어온 것이 원인), RLS 정책만 있으면 `student_child`뿐 아니라 **guardian 본인조차** `42501 permission denied`로 막힙니다. 그래서 실제 구현은 "정책 + `grant select(...) on ... to authenticated`"를 항상 세트로 둡니다 — 새 테이블에 이중 방어를 적용할 때 이 패턴을 그대로 따르세요(상세: `CLAUDE.md`, `docs/MakerStudio_Session_2026-08-21_Summary_v1.2.md` §1~3).
+
 ### 역할별 접근 매트릭스 (요약)
 
 | 리소스 | student_teen | student_child | guardian | admin |
@@ -124,7 +126,7 @@ API 명세서의 `identity` 엔드포인트들이 **정확히 어떤 순서로, 
 
 - [ ] `signup/child/verify`에서 클라이언트가 보낸 동의값을 서버가 재검증하는가 (§2.3-7)
 - [ ] `billing/checkout`이 `role=student_child` 토큰으로 호출되면 `403`을 반환하는가
-- [ ] RLS 정책이 `subscriptions`/`payments` 테이블에 적용되어 있는가
+- [x] RLS 정책이 `subscriptions`/`payments` 테이블에 적용되어 있는가 (2026-08-21 구현·실증 완료, `0022`~`0023`) — **정책만으로는 안 됨, `authenticated`에 대한 GRANT도 같이 확인할 것**(위 §3 2026-08-21 항목 참고)
 - [ ] 비밀번호 재설정/로그인 실패 응답이 "이메일 존재 여부"를 노출하지 않는가
 - [ ] 계정 삭제 시 `payments` 레코드가 삭제되지 않고 보존되는가 (§4.5)
 - [ ] 아동 동의 확인 로그가 감사 가능한 형태로 남는가
