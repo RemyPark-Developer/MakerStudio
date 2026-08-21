@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAuthClient } from "@/lib/supabase/server";
 import { withErrorHandling } from "@/lib/api-error-handler";
 
 /**
@@ -18,7 +18,9 @@ export const POST = withErrorHandling(async (req: NextRequest) => {
     );
   }
 
-  const supabase = getSupabaseServerClient();
+  // ⚠️ service_role 싱글턴을 쓰면 안 됨 — refreshSession이 그 클라이언트의 세션
+  // 상태를 영구히 바꿔버린다(createSupabaseAuthClient 주석 참고). 요청마다 새로 만든다.
+  const supabase = createSupabaseAuthClient();
   const { data, error } = await supabase.auth.refreshSession({ refresh_token: refreshToken });
 
   if (error || !data.session) {

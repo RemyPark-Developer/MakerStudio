@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAuthClient } from "@/lib/supabase/server";
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
@@ -15,7 +15,9 @@ export async function POST(req: NextRequest) {
   // ⚠️ Auth_Flow.md §2.5-2: 가입 여부와 무관하게 항상 200을 반환한다.
   // (계정 탐색 공격 방지 — "이 이메일로 가입한 계정이 있다/없다"를 노출하지 않음)
   try {
-    const supabase = getSupabaseServerClient();
+    // resetPasswordForEmail 자체는 세션을 안 바꾸지만, 이 4개 인증 라우트는 통일해서
+    // service_role 싱글턴을 절대 안 쓰는 걸 원칙으로 한다(createSupabaseAuthClient 주석 참고).
+    const supabase = createSupabaseAuthClient();
     await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/reset-password`,
     });
