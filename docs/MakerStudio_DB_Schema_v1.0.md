@@ -165,6 +165,42 @@ CS/관리자가 사유를 수동으로 세팅(`duplicate_payment` | `system_erro
 | last_verified_at | timestamptz | §8.2 신뢰 지표 공개용 |
 | is_premium | boolean | Free 콘텐츠 여부 (MVP는 3개 다 Free일 수 있음 — Premium 콘텐츠 추가 시 이 플래그로 게이팅) |
 
+### `content_modules` (`0010_content_modules.sql`, 2026-08-21까지 이 문서에 기록된 적 없었음)
+
+위 `examples`는 이 문서가 원래 설계한 테이블이지만, 실제로는 `content/examples/*.json`(정적
+파일)이 카탈로그를 서빙하고 있어 dev DB의 `examples`는 비어 있다(2026-08-20 스키마 감사에서
+확인). **관리자 AI 콘텐츠 검수 파이프라인이 실제로 쓰는 테이블은 별도로 신설된 `content_modules`다**
+— 관리자 승인(`published`) 시 `lib/content/publishedModules.ts`가 `examples/*.json`과 같은
+`Example` 모양으로 매핑해 카탈로그에 합쳐 노출한다(`lib/content/listExamples.ts`).
+
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| id | text, PK | 버전별 기술 키. v1은 보통 `slug`와 같고(예: `ultrasonic`), 개선판은 `{slug}-v{version}`(예: `ultrasonic-v2`) |
+| slug | text, not null(0032) | **버전과 무관하게 콘텐츠를 식별하는 안정적인 키** — URL(`/examples/{slug}`)과 `learning_progress.module_id`가 참조. 기존 행은 `slug=id`로 백필됨 |
+| board / icon / label_ko / label_en | | |
+| difficulty / estimated_minutes / pin | | |
+| intro_ko / intro_en / parts / circuit | | |
+| code | text | |
+| explain_ko / explain_en / mission_ko / mission_en | | |
+| quiz | jsonb | `{question, options, answer, explain}` |
+| source_example | text | §6.5 소싱 출처 |
+| is_premium | boolean(0030) | 관리자가 승인 시점에 결정 |
+| version | integer, 기본 1 | §6.3-a — `UNIQUE(slug, version)`(0032). 개선판이 승인되면 이전 버전 행도 `published` 그대로 유지(둘 다 동시에 published 가능) |
+| status | text | `draft` \| `pending_review` \| `published` \| `withdrawn` \| `automation_stuck`(§6.3, §6.3-b) |
+| retry_count / last_error / last_verified_at | | 자동 재검증 이력 |
+| created_by / reviewed_by / review_note | uuid → auth.users.id | |
+| created_at / updated_at | timestamptz | **§6.3-a가 `updated_at`을 "언제 published로 승인됐는가"의 대리 지표로 씀** — 승인 시(`app/api/content/[id]/review/route.ts`) 항상 같이 갱신되고, 승인 후 재수정 기능이 없어 지금은 항상 성립하는 전제 |
+
+**RLS**: `content_modules_public_read_published`(0010, `status='published'`만 anon+authenticated
+select 허용, 0030에서 `is_premium=false` 조건 추가) + 테이블 단위 GRANT(0029). `slug`/`version`
+컬럼은 이 정책·GRANT에 포함되는 컬럼 제한이 없어 별도 변경 불필요(0032).
+
+**§6.3-a 버전 판정 로직**: `lib/content/publishedModules.ts`의 `getPublishedModuleForUser(slug, userId)`
+— 로그인 사용자가 `learning_progress`에 이 `slug`로 된 행을 이미 갖고 있으면(퀴즈 제출 이력),
+그 진도의 `started_at` 시점에 이미 `published`였던 버전 중 가장 높은 버전으로 고정. 진도가
+없거나 비로그인이면 최신 버전. 카탈로그(`getPublishedModules()`)는 항상 슬러그당 최신 버전만
+노출.
+
 ---
 
 ## 4. `learning` 도메인

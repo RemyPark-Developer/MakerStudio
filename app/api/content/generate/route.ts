@@ -73,6 +73,7 @@ export const POST = withErrorHandling(async (req: NextRequest) => {
       // 통과 → DB에 PENDING_REVIEW로 저장
       const { error: upsertError } = await supabase.from("content_modules").upsert({
         id: parsed.id,
+        slug: parsed.id, // 새로 생성되는 콘텐츠는 항상 v1 — slug=id로 시작(§6.3-a, 0032)
         board,
         icon: parsed.icon,
         label_ko: parsed.label.ko,
@@ -118,6 +119,7 @@ export const POST = withErrorHandling(async (req: NextRequest) => {
   if (moduleId && parsed) {
     await supabase.from("content_modules").upsert({
       id: moduleId,
+      slug: moduleId, // §6.3-a — 새 콘텐츠는 항상 v1, slug=id로 시작(0032)
       board,
       label_ko: parsed?.label?.ko ?? topic,
       code: parsed?.code ?? "",

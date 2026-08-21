@@ -23,7 +23,7 @@ export const GET = withErrorHandling(async (req: NextRequest) => {
   const supabase = getSupabaseServerClient();
   const { data, error } = await supabase
     .from("content_modules")
-    .select("id, label_ko, board, difficulty, estimated_minutes, status, retry_count, created_at, last_verified_at, reviewed_by, review_note, updated_at")
+    .select("id, slug, version, label_ko, board, difficulty, estimated_minutes, status, retry_count, created_at, last_verified_at, reviewed_by, review_note, updated_at")
     .in("status", statuses)
     .order("updated_at", { ascending: false });
 

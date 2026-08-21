@@ -18,6 +18,8 @@ function pickText(value: unknown): string {
 
 type ContentModule = {
   id: string;
+  slug: string;
+  version: number;
   label_ko: string;
   board: string;
   difficulty: number;
@@ -54,6 +56,9 @@ export default function ContentReviewDetailPage() {
   const [note, setNote] = useState("");
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [isPremium, setIsPremium] = useState(false);
+
+  const [reviseBusy, setReviseBusy] = useState(false);
+  const [reviseMsg, setReviseMsg] = useState<string | null>(null);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -151,6 +156,26 @@ export default function ContentReviewDetailPage() {
     }
   }
 
+  async function handleRevise() {
+    if (!confirm(`v${(module?.version ?? 1) + 1} 개선판 초안을 만들까요? 지금 v${module?.version} 내용을 그대로 복제해서 검수 대기 상태로 넣어요.`)) return;
+
+    setReviseBusy(true);
+    setReviseMsg(null);
+    try {
+      const res = await authedFetch(`/api/content/${params.id}/revise`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        setReviseMsg(data.message ?? "개선판 생성에 실패했어요.");
+        return;
+      }
+      router.push(`/admin/content-review/${data.id}`);
+    } catch {
+      setReviseMsg("네트워크 오류가 발생했어요.");
+    } finally {
+      setReviseBusy(false);
+    }
+  }
+
   if (forbidden) {
     return (
       <main className="wrap">
@@ -179,9 +204,11 @@ export default function ContentReviewDetailPage() {
 
       <div className="card">
         <div className="tab">기본 정보</div>
-        <h2>{module.label_ko}</h2>
+        <h2>
+          {module.label_ko} <span className="muted" style={{ fontSize: 14, fontWeight: 400 }}>v{module.version}</span>
+        </h2>
         <p className="muted">
-          {module.board} · 난이도 {module.difficulty} · {module.estimated_minutes}분 · 재시도 {module.retry_count}회
+          {module.board} · 난이도 {module.difficulty} · {module.estimated_minutes}분 · 재시도 {module.retry_count}회 · slug: {module.slug}
         </p>
         {module.last_error && (
           <p style={{ color: "#c0392b", fontSize: 13, marginTop: 8 }}>
@@ -193,6 +220,21 @@ export default function ContentReviewDetailPage() {
           <b>준비물:</b> {module.parts?.join(", ")}
         </p>
       </div>
+
+      {module.status === "published" && (
+        <div className="card">
+          <div className="tab">§6.3-a 개선판</div>
+          <p className="muted" style={{ fontSize: 13 }}>
+            지금 v{module.version} 내용을 그대로 복제해 v{module.version + 1} 초안을 만들어요.
+            승인 전까지 기존 v{module.version}은 그대로 서비스되고, 승인하면 신규 학습자는
+            새 버전을, 이미 학습 중이던 사용자는 계속 v{module.version}을 봐요(자동 전환 없음).
+          </p>
+          <button onClick={handleRevise} disabled={reviseBusy} className="btn btnOutline" style={{ marginTop: 8 }}>
+            {reviseBusy ? "생성 중..." : `개선판 만들기 (v${module.version + 1} 초안)`}
+          </button>
+          {reviseMsg && <p className="muted" style={{ marginTop: 10 }}>{reviseMsg}</p>}
+        </div>
+      )}
 
       <div className="card">
         <div className="tab">전체 코드</div>

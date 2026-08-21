@@ -1,10 +1,11 @@
 # 2026-08-21 세션 요약 — 설계 판단과 구현 범위
 
-**버전**: v1.9 · **최종 수정**: 2026-08-21 · **짝 파일**: `MakerStudio_Auth_Flow_v1.0.md`, `MakerStudio_Session_2026-08-20_Summary_v1.1.md`
+**버전**: v1.10 · **최종 수정**: 2026-08-21 · **짝 파일**: `MakerStudio_Auth_Flow_v1.0.md`, `MakerStudio_Session_2026-08-20_Summary_v1.1.md`
 
 ### 개정 이력
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| v1.10 | 2026-08-21 | §6.3-a "이미 학습 중이던 사용자" 버전 고정 정책 확정·구현 이어붙임 — 인용만 되고 실체가 없던 설계 문서 섹션을 채우고, `content_modules`에 슬러그/버전 분리 + "개선판 만들기" 관리자 플로우 신설 |
 | v1.9 | 2026-08-21 | 회사 귀책(중복결제·시스템오류) 전액환불 이어붙임 — 2026-08-20에 의도적으로 범위 제외했던 항목을 착수, `refund/calculate` 확장 |
 | v1.8 | 2026-08-21 | ⚠️ Supabase 싱글턴 세션오염 버그 발견·수정 이어붙임 — RGB LED UI 확인 중 우연히 발견한, 이 세션의 RLS 작업과 무관한 심각한 기존 버그 |
 | v1.7 | 2026-08-21 | `content_modules.is_premium` 추가 + 관리자 유료 설정 + RLS 동시 수정(0030) 이어붙임 — 2026-08-20에 보류했던 항목을 실제 요구사항이 생겨 완료 |
@@ -34,6 +35,7 @@
 | 8 | `content_modules.is_premium` 추가 + 관리자 유료 설정 + RLS 동시 수정 | `5807660` | `0030` |
 | 9 | ⚠️ Supabase 싱글턴 세션오염 버그 발견·수정 | `fdc4622` | 없음(코드만) |
 | 10 | 회사 귀책 전액환불 (`payments.refund_reason`) | `f2c70f4` | `0031` |
+| 11 | §6.3-a 콘텐츠 버전 고정 정책 (`content_modules.slug`) | (미커밋) | `0032` |
 
 ---
 
@@ -575,6 +577,92 @@ SSG 금지) 관련 위험을 미리 알고 있었고("RLS 정책 수정 부분�
 
 ---
 
+## 11. §6.3-a 콘텐츠 버전 고정 정책 (`content_modules.slug`)
+
+**커밋**: (미커밋 — 이번 세션 진행 중) · **마이그레이션**: `0032`(작성만, 적용은 대표님이 SQL Editor에서)
+
+### 배경
+
+`Project_Design_v2.4.md` §6.3 본문(384행)이 "신규 학습자는 v2, 이미 학습 중이던 사용자는
+§6.3-a 정책에 따름"이라고 인용하지만, §6.3-a 섹션 자체가 실제로는 존재하지 않았음(§6.3
+바로 다음이 §6.3-b로 건너뜀 — `grep`으로 재확인). 대표님이 이 정책을 확정하고 실제
+구현까지 요청.
+
+### 핵심 설계 판단
+
+- **§6.3 다이어그램(REVISION_DRAFT, 고객 제출 이벤트)을 그대로 구현하지 않고 단순화**함 —
+  이 저장소엔 이벤트 버스도 비관리자 콘텐츠 제출 플로우도 없음(기존에 이미 알려진 사실).
+  대신 관리자가 `app/admin/content-review`에서 직접 누르는 "개선판 만들기" 버튼으로
+  트리거(대표님이 준 요구사항과 정확히 일치).
+- **`content_modules.id`(PK)와 `slug`(버전 무관 식별자)를 분리**(`0032`) — `id`가 PK라
+  한 콘텐츠=한 행이던 구조라 버전을 여러 개 동시에 못 가졌음. 기존 행은 `slug=id`로
+  백필(URL·기존 진도 그대로 유효), 개선판은 새 `id`(`{slug}-v{version}`)를 받고 `slug`는
+  유지 — 두 버전이 동시에 `published`일 수 있음. `UNIQUE(slug, version)` 제약.
+- **"개선판 만들기"는 복제 직후 곧장 `pending_review`로 넣음**(`draft` 경유 안 함,
+  `app/api/content/[id]/revise/route.ts`) — 이미 검증된 v1 코드의 복제라 자동 재검증이
+  무의미하고, 이 저장소엔 "기존 draft를 재검증에 태우는" 트리거 자체가 없음(`generate`
+  파이프라인은 새 topic 전용). `status` enum에 별도 `revision_draft` 값을 추가하지 않고
+  `version > 1`을 개선판 표식으로 씀 — 기존 검수 목록·승인/반려 API(`app/api/content/[id]/review`)를
+  전혀 안 건드리고 그대로 재사용.
+- **버전 판정은 읽기 시점에 서버가 계산, 새 컬럼·RPC·프론트엔드 변경 없음** —
+  `lib/content/publishedModules.ts`의 `getPublishedModuleForUser(slug, userId)`. 퀴즈 제출
+  경로(`app/examples/[id]/QuizBlock.tsx` → `/api/learning/quiz` → `submit_quiz_attempt` RPC)는
+  원래도 URL 파라미터(슬러그)를 `module_id`로 그대로 써왔다는 걸 확인해서, "이미 학습
+  중"의 판정을 `learning_progress`에 그 슬러그 행이 있는지만 보면 되도록 설계 — 대표님이
+  준 기준("progress 행 존재 여부")과 정확히 일치하면서 결제·인증만큼 안정적인 이 기존
+  경로를 하나도 안 건드림. 어느 버전에 고정할지는 그 진도의 `started_at`과 각 버전의
+  `content_modules.updated_at`(=언제 `published` 승인됐는지의 대리 지표)을 비교해서
+  결정 — `started_at` 이전에 이미 published였던 버전 중 최고 버전.
+  - **전제 하나 명시**: `updated_at`이 "언제 published됐는가"를 정확히 반영하는 건
+    "게시 후 재수정 기능이 없다"는 현재 상태에 의존함 — 나중에 그 기능이 생기면
+    `published_at` 별도 컬럼으로 전환 필요(문서에도 명시함).
+- `lib/content/publishedModules.ts`의 `getPublishedModules()`(카탈로그)도 함께 수정 —
+  슬러그당 최신 버전만 골라 반환하도록 해서 카탈로그는 항상 신규 학습자 기준(요구사항 4번).
+- `mapRowToExample()`의 노출 `id`를 `row.id`(기술 PK) → `row.slug`로 변경 — URL·다운로드
+  파일명이 버전 접미사(`-v2`)를 노출하지 않도록.
+
+### 문서 동기화
+
+- `Project_Design_v2.4.md` v2.5 — §6.3-b 앞에 §6.3-a 신설.
+- `DB_Schema_v1.0.md` — `content_modules`가 이 문서에 **한 번도 기록된 적 없었던 걸 발견**
+  (0010에서 추가된 뒤 누락, `examples` 섹션은 실제로는 안 쓰이는 설계 스펙이었다는 것도
+  같이 명시) — 기존 컬럼 전체 + `slug`/버전 의미를 새로 문서화.
+- `API_Spec_v1.0.md` — `GET /api/content/examples/:id`에 버전 고정 동작 추가, `POST
+  /api/content/:id/revise` 신규 행 추가. admin content-review의 나머지 엔드포인트들도
+  이 문서에 원래 없었던 걸 확인했지만 이번 범위 밖이라 손대지 않음.
+
+### 검증 방법 — 대표님이 `0032`를 SQL Editor에서 적용한 뒤 실DB로 전 구간 실증 완료
+
+- 임시 v1 콘텐츠(`content_modules`, service_role로 직접 insert) + 임시 학생 계정(student_teen)
+  으로 실제 `POST /api/learning/quiz` 호출 → `learning_progress` 행 생성(기존 학습자 조건 충족).
+- 임시 admin 계정으로 실제 `POST /api/content/{v1Id}/revise` 호출 → v2 draft(`pending_review`,
+  `version:2`) 생성 확인. v1/v2를 구분하려고 v2의 `explain_ko`/`label_ko`를 service_role로
+  직접 다르게 세팅(편집 UI가 없어 검증 목적의 임시 조치 — 버전 판정 로직 자체와는 무관).
+- 실제 `POST /api/content/{v2Id}/review`(action:approve)로 v2를 `published` 전환.
+- **실제 `GET /api/content/examples/{slug}` HTTP 호출로 버전 분기 확인**:
+  - 기존 학습자(v1 진도 有) 토큰 → `explain: "이것은 v1 설명입니다"` (v1 고정)
+  - 신규 학습자(진도 없음) 토큰 → `explain: "이것은 v2 설명입니다"` (최신)
+  - 비로그인 → `explain: "이것은 v2 설명입니다"` (최신)
+  - 응답 `id` 필드가 기술적 PK(`{slug}-v2`)가 아니라 `slug` 그대로인 것도 확인.
+- `GET /api/content/examples`(카탈로그) → 이 슬러그가 정확히 1개, v2 라벨 기준으로만
+  노출되는 것 확인(슬러그당 최신만 노출).
+- 임시 계정 3개(기존 학습자·신규 학습자·admin)·`content_modules`(v1/v2)·`learning_progress`/
+  `quiz_attempts` 행은 검증 직후 전부 삭제, 검증 스크립트도 커밋하지 않고 삭제.
+
+### 의도적으로 제외한 것
+
+- 고객이 직접 "개선 제안"을 제출하는 플로우 — §6.3 다이어그램의 원래 트리거였지만
+  비관리자 제출 인프라 자체가 없어 범위 밖(기존에 이미 알려진 제외 항목).
+- 개선판 콘텐츠를 실제로 다르게 편집하는 UI — 지금은 복제된 그대로 검수·승인하는
+  흐름만 구현. 실제 내용을 바꾸려면 관리자가 review-chat으로 검토 후, 향후 편집 기능이
+  생기면 그걸로 수정하거나 지금은 반려 후 `generate`로 다시 만드는 수밖에 없음.
+- `published_at` 별도 컬럼 — 지금은 "게시 후 재수정 없음" 전제로 `updated_at`을 대신
+  씀(위 참고), 그 전제가 깨지면 필요.
+
+(상세: [[project-content-versioning-6-3-a]])
+
+---
+
 ## 다음에 이어갈 것 (전부 대표님이 먼저 꺼낼 때 시작 — 2026-08-20 문서에서 이월)
 
 - Solapi 프로덕션 키 설정
@@ -585,3 +673,6 @@ SSG 금지) 관련 위험을 미리 알고 있었고("RLS 정책 수정 부분�
 - `progress`/`saved_codes` 미사용 판단 로직의 실데이터 검증 (`examples` 테이블에 데이터가 생기면)
 - `already_member` 레이스 사용자 메시지 개선 (정확성 문제 아닌 UX nicety)
 - 회사 귀책 사유(`refund_reason`)를 세팅하는 admin API/화면 (지금은 SQL Editor 수동)
+- ~~§6.3-a 콘텐츠 버전 고정 정책~~ — 2026-08-21 완료(위 §11, `0032`)
+- 개선판 콘텐츠를 실제로 편집하는 UI (지금은 복제 그대로만 검수 가능)
+- `content_modules`가 승인 후 재수정 가능해지면 `published_at` 컬럼 분리 검토

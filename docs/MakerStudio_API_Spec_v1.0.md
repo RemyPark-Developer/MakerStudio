@@ -64,9 +64,15 @@
 | Method | Path | 인증 | 설명 |
 |---|---|---|---|
 | GET | `/api/content/examples` | ✕ | 콘텐츠 목록 (PUBLISHED만, 카탈로그 화면용). 쿼리파라미터 `?q=검색어&sort=name\|difficulty` |
-| GET | `/api/content/examples/:id` | ✓ (선택적) | 단일 콘텐츠 조회. **§7.2 핵심 원칙**: Free 콘텐츠는 비로그인도 전체 반환, Premium 콘텐츠는 서버가 구독 상태 확인 후에만 `code`·`explain` 필드를 포함. 미구독 시 `intro`만 포함한 축약 응답(미리보기용) |
+| GET | `/api/content/examples/:id` | ✓ (선택적) | 단일 콘텐츠 조회. **§7.2 핵심 원칙**: Free 콘텐츠는 비로그인도 전체 반환, Premium 콘텐츠는 서버가 구독 상태 확인 후에만 `code`·`explain` 필드를 포함. 미구독 시 `intro`만 포함한 축약 응답(미리보기용). **§6.3-a(2026-08-21)**: `content_modules` 기반 콘텐츠는 `:id`가 슬러그를 가리키며, 요청 사용자가 그 슬러그로 이미 학습 중(=`learning_progress` 행 존재)이면 진도 시작 시점 기준으로 고정된 버전을, 신규 학습자·비로그인이면 최신 버전을 반환 |
+| POST | `/api/content/:id/revise` | ✓ (admin) | §6.3-a "개선판 만들기" — 게시된 `content_modules` 행(`:id`, 기술적 PK)을 복제해 같은 슬러그의 다음 버전을 `pending_review`로 생성. 이미 검증된 코드의 복제라 자동 재검증(스키마+컴파일) 없이 곧장 검수 대기로 들어감. 응답: `{ok, id, version}`. `source` 행이 `published`가 아니면 `409` |
 
 **⚠️ 이 도메인이 §7.2 위반이 가장 쉽게 발생하는 지점입니다.** `getStaticProps`/SSG로 이 엔드포인트를 대체하지 말 것 — 반드시 요청마다 서버에서 권한을 확인하는 동적 응답이어야 합니다.
+
+**참고**: `app/admin/content-review` 화면이 쓰는 나머지 관리자 전용 엔드포인트(`/api/content/generate`,
+`/api/content/pending`, `/api/content/:id`, `/api/content/:id/review`, `/api/content/:id/review-chat`)는
+이 문서에 원래부터 기록된 적이 없었다(2026-08-21 확인, §6.3 파이프라인이 이 문서 최초 작성일
+이후에 만들어졌기 때문) — 이번 변경 범위 밖이라 손대지 않음.
 
 ---
 

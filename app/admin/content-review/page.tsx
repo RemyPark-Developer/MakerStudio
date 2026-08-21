@@ -6,6 +6,8 @@ import { authedFetch } from "@/lib/client-auth";
 
 type ModuleRow = {
   id: string;
+  slug: string;
+  version: number;
   label_ko: string;
   board: string;
   difficulty: number;
@@ -113,6 +115,9 @@ export default function ContentReviewListPage() {
               }}
             >
               <b>{m.label_ko}</b>
+              <span className="muted" style={{ marginLeft: 8, fontSize: 12 }}>
+                v{m.version}
+              </span>
               <span
                 className="muted"
                 style={{
