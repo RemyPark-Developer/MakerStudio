@@ -139,6 +139,36 @@ CS/관리자가 사유를 수동으로 세팅(`duplicate_payment` | `system_erro
 
 **보존 원칙(§4.5)**: `deleted_at`이 찍힌 사용자의 `payments` 레코드는 삭제하지 않고 그대로 둡니다 — 전자상거래법상 거래 기록 보존 의무(예: 5년) 때문입니다. `profiles`가 소프트 삭제되어도 `payments`는 `subscription_id`를 통해 계속 조회 가능해야 합니다.
 
+### 관리자 대시보드 집계 뷰 (`0033_admin_dashboard_views.sql`, 2026-08-21)
+
+`payments`/`subscriptions`/`family_groups` 위에 만든 읽기 전용 뷰 3개 — `app/api/billing/dashboard`가
+admin 권한 확인 후 service_role로만 조회한다. **⚠️ `authenticated`/`anon`에 절대 GRANT하지
+않는다** — Postgres 뷰는 기본적으로 뷰 소유자(마이그레이션 실행 권한, RLS 우회) 권한으로
+실행되므로, GRANT를 주면 `payments`/`subscriptions`의 guardian-only RLS를 완전히 우회해서
+`student_child`를 포함한 모든 인증 사용자가 전체 매출·구독자 수를 볼 수 있게 된다 — 이
+프로젝트가 지켜온 "새 테이블엔 정책+GRANT를 세트로" 패턴을 그대로 적용하면 오히려 취약점이
+생기는 예외 케이스.
+
+| 뷰 | 컬럼 | 정의 |
+|---|---|---|
+| `admin_monthly_revenue` | `month, revenue, payment_count` | `payments.status='success'`를 월별로 합산(개인+Family 통합, 0015 이후 한 테이블이라 union 불필요) |
+| `admin_plan_customers` | `plan, customer_count` | `plan in ('premium','family')`만(아래 참고). "고객"의 정의는 `current_period_end >= now()` — 해지해도 잔여기간 동안은 카운트(§4.3 원칙, `lib/content/gate.ts`의 `hasPremiumAccess()`와 동일 정의) |
+| `admin_plan_churn` | `plan, active_count, canceled_this_period` | 이번 달(UTC 기준 `date_trunc('month', now())`) 한정. `status='active'`/`status='canceled' and canceled_at`이 이번 달인 것만 집계 — "고객 수"와 달리 접근권이 아니라 취소 **결정**을 세는 지표라 다른 컬럼 기준을 씀. 이탈률 = `canceled_this_period / (active_count + canceled_this_period)`는 뷰가 아니라 API 라우트에서 계산(0으로 나누는 경우 방어 + 검증하기 쉽게 한 곳에 모음) |
+
+**`free` 티어는 이 집계에서 빠져 있다** — `subscriptions.plan='free'` 행이 실제로 생성된 적이
+없다(`activateSubscription()`은 실제 결제가 일어날 때만 upsert, `plan:'free'`를 insert하는
+코드 경로가 없음, 2026-08-21 확인). 그대로 카운트하면 항상 0이 나와 오히려 부정확하므로,
+이번 범위는 premium/family만 다루기로 결정(대표님 확인). free 인원까지 정확히 세려면
+"전체 학습자 계정 − 유료 커버 인원" 같은 별도 계산이 필요 — 다음에 이어갈 것 참고.
+
+**실증 검증**: 임시 계정 여러 개 + `subscriptions`/`family_groups`/`payments` 조합으로 수기
+계산한 기대값과 실제 뷰·API 응답이 정확히 일치하는지 확인 완료(2026-08-21, 대표님이 0033
+적용 후). 검증 중 쓰기 직후 곧바로 읽으면 `admin_plan_churn`의 `canceled_this_period`가
+몇 초간 지연 반영되는 현상을 발견했지만, `active_count`(단순 컬럼 비교)는 즉시 반영되는 것과
+대조해보면 뷰의 SQL 로직 자체는 정확하고 infra 레벨의 짧은 propagation lag로 판단됨 — 몇 초
+뒤 재조회하면 항상 정확한 값으로 안정화됐고, 실사용 시나리오(해지와 대시보드 조회가 분·시간
+단위로 떨어져 일어남)엔 영향이 없음.
+
 ---
 
 ## 3. `content` 도메인

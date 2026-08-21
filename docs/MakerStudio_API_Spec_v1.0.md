@@ -55,7 +55,8 @@
 | POST | `/api/billing/subscription/cancel` | ✓ (guardian) | 즉시 해지 예약, 현재 결제주기 종료일까지는 유지(§4.3) |
 | POST | `/api/billing/subscription/retry` | ✓ (guardian) | 결제 실패 후 재시도 |
 | GET | `/api/billing/history` | ✓ (guardian) | 결제 내역/영수증 목록 |
-| POST | `/api/billing/refund/calculate` | ✓ (guardian) | `{childId}`(개인) 또는 `{family:true}`(Family, 2026-08-20 추가) → 일할계산 또는 미사용 전액환불 예정액 반환 (§4.5, 계산식: `월구독료 × 잔여일수/전체주기일수`). Family는 7일 이내+가족 전원 미사용 시 전액환불. **회사 귀책 전액환불은 이 API가 안 다룸 — CS/관리자 수동 처리** |
+| POST | `/api/billing/refund/calculate` | ✓ (guardian) | `{childId}`(개인) 또는 `{family:true}`(Family, 2026-08-20 추가) → 일할계산 또는 미사용 전액환불 예정액 반환 (§4.5, 계산식: `월구독료 × 잔여일수/전체주기일수`). Family는 7일 이내+가족 전원 미사용 시 전액환불. **회사 귀책(중복결제·시스템오류) 전액환불도 지원(2026-08-21)** — `payments.refund_reason`이 세팅된 결제 건이 있으면 기간·사용여부 무관 그 결제금액 전액환불(`reason: "company_fault"`). 세팅 자체는 여전히 CS/관리자가 SQL Editor로 수동 |
+| GET | `/api/billing/dashboard` | ✓ (admin) | **관리자 대시보드(2026-08-21)** — 이번달 매출/유료 구독자 수/이탈률/신규 결제 요약, 요금제별(premium/family) 고객수·비율·이탈률, 최근 6개월 매출 추이. `supabase/migrations/0033`의 뷰 3개를 service_role로만 조회(DB_Schema §2 참고, 뷰를 `authenticated`에 GRANT하면 RLS가 우회되는 위험이 있어 의도적으로 GRANT 없음) |
 
 ---
 
