@@ -1,10 +1,11 @@
 # 2026-08-21 세션 요약 — 설계 판단과 구현 범위
 
-**버전**: v1.7 · **최종 수정**: 2026-08-21 · **짝 파일**: `MakerStudio_Auth_Flow_v1.0.md`, `MakerStudio_Session_2026-08-20_Summary_v1.1.md`
+**버전**: v1.8 · **최종 수정**: 2026-08-21 · **짝 파일**: `MakerStudio_Auth_Flow_v1.0.md`, `MakerStudio_Session_2026-08-20_Summary_v1.1.md`
 
 ### 개정 이력
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| v1.8 | 2026-08-21 | ⚠️ Supabase 싱글턴 세션오염 버그 발견·수정 이어붙임 — RGB LED UI 확인 중 우연히 발견한, 이 세션의 RLS 작업과 무관한 심각한 기존 버그 |
 | v1.7 | 2026-08-21 | `content_modules.is_premium` 추가 + 관리자 유료 설정 + RLS 동시 수정(0030) 이어붙임 — 2026-08-20에 보류했던 항목을 실제 요구사항이 생겨 완료 |
 | v1.6 | 2026-08-21 | `/mypage/billing` 실브라우저 UI 확인 이어붙임 — API 레벨 검증을 넘어 실제 화면 렌더링까지 확인 |
 | v1.5 | 2026-08-21 | 남은 4개 테이블(`examples`/`password_reset_tokens`/`tutor_usage`/`wishlist_items`) 확인으로 실DB 19개 테이블 전수 완료 — 새 마이그레이션 없음(전부 정상 상태였음) |
@@ -30,6 +31,7 @@
 | 6 | 남은 4개 테이블 확인 — 실DB 19개 테이블 전수 완료 | (문서만) | 없음 |
 | 7 | `/mypage/billing` 실브라우저 UI 확인 | (문서만) | 없음 |
 | 8 | `content_modules.is_premium` 추가 + 관리자 유료 설정 + RLS 동시 수정 | `5807660` | `0030` |
+| 9 | ⚠️ Supabase 싱글턴 세션오염 버그 발견·수정 | `fdc4622` | 없음(코드만) |
 
 ---
 
@@ -422,6 +424,83 @@ SSG 금지) 관련 위험을 미리 알고 있었고("RLS 정책 수정 부분�
   요청받지 않음.
 
 (상세: [[project-content-modules-premium-deferred]])
+
+---
+
+## 9. ⚠️ Supabase 싱글턴 세션오염 버그 발견·수정
+
+**커밋**: `fdc4622`
+
+### 배경
+
+8번 항목(RGB LED)을 실브라우저로 클릭해서 확인해달라는 요청으로 시작했는데, 로그인
+후에는 콘텐츠가 계속 "찾을 수 없음"으로 떴음. 원인을 추적하다 **content_modules나
+이 세션의 RLS 작업과 전혀 무관한, 훨씬 오래되고 심각한 기존 버그**를 발견함.
+
+### 핵심 발견
+
+`lib/supabase/server.ts`의 `getSupabaseServerClient()`는 `service_role` 키로 한 번만
+생성되는 **모듈 전역 싱글턴**이다. `login`/`refresh`/`password/reset` 3개 라우트가 이
+공유 인스턴스에서 `signInWithPassword`/`refreshSession`/`updateUser`를 호출하고
+있었는데, 이 메서드들은 `persistSession: false`여도 **클라이언트의 메모리상 현재
+세션을 그대로 바꿔버린다.** 서버 프로세스 안에서 로그인이 한 번이라도 일어나면, 그
+순간부터 이 싱글턴은 service_role이 아니라 **그 사용자 권한으로 서버가 살아있는 동안
+영구 고정**돼서, 그 이후 모든 사용자·모든 요청에 영향을 준다.
+
+**왜 오늘 처음 드러났는가**: 대부분 테이블에 RLS/GRANT가 없던 시절엔 "권한이 낮아진
+서비스 클라이언트"가 뭘 하든 조용히 42501로 실패하거나 티가 안 났음. 오늘 실제로 RLS를
+걸어놓으니 증상(로그인 후 콘텐츠 404)이 명확하게 드러난 것 — 오늘 만든 버그가 아니라
+오늘에서야 눈에 보이게 된 버그. `npm run dev`(HMR)와 `npm run build && npm run start`
+둘 다에서 동일하게 재현돼서, Next.js dev 모드 문제가 아니라는 것도 확인함.
+
+**특히 심각했던 지점 — `password/reset/route.ts`**: `resetToken`을 검증 없이 그냥
+무시하고 "그 순간 싱글턴에 남아있던 아무 세션"의 비밀번호를 바꾸고 있었음(코드 주석에
+"실제 프로젝트 설정에 맞춰 연결"이라고 적혀 있었음 — 처음부터 미완성 스텁). 사용자 A가
+로그인해서 싱글턴을 오염시킨 상태에서 사용자 B가 비밀번호 재설정을 시도하면 A의
+비밀번호가 바뀔 수 있는 구조 — 계정 탈취로 이어질 수 있는 취약점. 다행히 프론트엔드에
+이 라우트를 호출하는 화면 자체가 없어서(`app/reset-password` 페이지 없음,
+`password_reset_tokens` 테이블도 죽은 테이블) 실사용자에게 노출된 적은 없었음.
+
+### 핵심 설계 판단
+
+- `lib/supabase/server.ts`에 `createSupabaseAuthClient()` 추가 — **매 호출마다 새
+  인스턴스**(절대 캐싱 안 함), `anon` key 사용(로그인·토큰갱신·비밀번호변경은 원래
+  브라우저가 anon key로 직접 하는 일이라 service_role이 애초에 불필요, 최소 권한 원칙).
+- `login`/`refresh`/`password/reset` 3개 라우트를 이 함수로 교체. `password/forgot`의
+  `resetPasswordForEmail`은 실제론 세션을 안 바꾸지만 4개 인증 라우트를 통일하기 위해
+  같이 교체.
+- `password/reset`에 빠져있던 `verifyOtp({token_hash: resetToken, type: 'recovery'})`
+  검증 단계를 추가 — 실제로 그 토큰의 주인 세션에서만 `updateUser`가 실행되게 함.
+
+### 검증 방법 — 전부 실제 프로덕션 빌드(`next build && next start`) + 실제 API 호출
+
+- 두 사용자 동시 로그인(`Promise.all`) → 각자 `/api/identity/me`로 정확히 본인 정보
+  반환, 안 섞임.
+- 로그인이 여러 번 일어난 뒤에도 `/api/content/examples/rgb-led-color-control`이
+  정상 200 — 더 이상 전체 콘텐츠가 안 보이는 일 없음.
+- `admin.generateLink({type:'recovery'})`로 실제 recovery token 2개를 발급해 두
+  사용자 동시 비밀번호 재설정(`Promise.all`) → 각자 본인의 새 비밀번호로만 로그인
+  성공, 서로의 새 비밀번호로 로그인 시도하면 정상 차단(안 섞임).
+- `npm test` 53개 전부 통과.
+- 수정 후 RGB LED 화면을 다시 실브라우저로 확인 — 비로그인/무료회원은 잠김, 유료회원만
+  코드 공개, 스크린샷 3장으로 확인.
+
+### 트러블슈팅 (원인 특정 과정)
+
+- 처음엔 dev 서버 빌드 캐시 문제로 의심(오늘 이미 몇 번 겪었던 유형)했으나, `.next`
+  삭제+깨끗한 재시작 후에도 재현됨.
+- 동시성(Promise.all로 auth.getUser+쿼리 경합) 재현도 시도했으나 실패 — 문제가 단순
+  레이스 컨디션이 아님을 확인.
+- `getPublishedModuleById`에 임시 디버그 로그를 추가해서 `count(*)` 쿼리 결과가 로그인
+  **직후부터 0으로 영구 고정**되는 걸 직접 확인 — 이 시점에 싱글턴 오염을 확신하고
+  원인을 특정함. 디버그 로그는 원인 파악 후 전부 원복(커밋 안 됨).
+- fetch 캐싱(Next.js Data Cache) 가설도 잠깐 테스트했으나 무관한 것으로 판명, 원복.
+
+### 의도적으로 제외한 것
+
+- 없음 — 발견 즉시 수정 및 실증 검증까지 완료.
+
+(상세: [[project-supabase-singleton-session-pollution-bug]])
 
 ---
 
