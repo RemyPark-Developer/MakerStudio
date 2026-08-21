@@ -33,7 +33,7 @@
 | 7 | `/mypage/billing` 실브라우저 UI 확인 | (문서만) | 없음 |
 | 8 | `content_modules.is_premium` 추가 + 관리자 유료 설정 + RLS 동시 수정 | `5807660` | `0030` |
 | 9 | ⚠️ Supabase 싱글턴 세션오염 버그 발견·수정 | `fdc4622` | 없음(코드만) |
-| 10 | 회사 귀책 전액환불 (`payments.refund_reason`) | (미커밋) | `0031` |
+| 10 | 회사 귀책 전액환불 (`payments.refund_reason`) | `f2c70f4` | `0031` |
 
 ---
 
@@ -508,7 +508,7 @@ SSG 금지) 관련 위험을 미리 알고 있었고("RLS 정책 수정 부분�
 
 ## 10. 회사 귀책 전액환불 (`payments.refund_reason`)
 
-**커밋**: (미커밋 — 이번 세션 진행 중) · **마이그레이션**: `0031`(작성만, 적용은 대표님이 SQL Editor에서)
+**커밋**: `f2c70f4` · **마이그레이션**: `0031`(대표님이 SQL Editor에서 적용 완료, 실DB 검증까지 마침)
 
 ### 배경
 
@@ -542,11 +542,26 @@ SSG 금지) 관련 위험을 미리 알고 있었고("RLS 정책 수정 부분�
   Should 행 설명 갱신.
 - `Session_2026-08-20_Summary_v1.1.md` "다음에 이어갈 것"에서 완료 표시.
 
-### 검증 방법
+### 검증 방법 — 대표님이 `0031`을 SQL Editor에서 적용한 뒤 실DB로 전 구간 실증 완료
 
-- **실DB 검증은 대표님이 `0031`을 SQL Editor에서 적용한 뒤에만 가능** — 이번 세션은
-  코드 레벨(로직 리뷰, 기존 `refund.test.ts` 회귀)까지만 확인. 마이그레이션 적용 후
-  실제 `payments` row에 `refund_reason`을 세팅해 API로 확인하는 건 다음 세션 과제.
+- 임시 guardian/child 계정(`auth.admin.createUser`) + 임시 `subscriptions`/`family_groups`/
+  `payments` row를 service_role로 직접 생성(결제 후 10일 경과로 세팅해 7일 미사용 전액환불
+  창을 의도적으로 벗어남 — 회사 귀책 오버라이드가 기간 조건과 무관하게 이긴다는 것까지
+  같이 증명하기 위함).
+- `refund_reason`에 허용 안 된 값(`not_a_real_reason`)을 넣는 insert 시도 → check 제약이
+  정상 거부하는 것 확인.
+- `findCompanyFaultPayment()`를 개인 구독(`subscriptionId`)·Family(`familyGroupId`) 양쪽에
+  직접 호출 → 정확한 결제 건(id/amount/refund_reason) 반환 확인.
+- **실제 `POST /api/billing/refund/calculate` HTTP 호출까지 실증**: `admin.generateLink()` +
+  throwaway 클라이언트에서만 쓰고 버리는 `verifyOtp()`로 guardian 실제 세션을 발급받아
+  (앱의 캐시된 service_role 싱글턴은 손대지 않음 — §9 세션오염 교훈 그대로 적용), dev
+  서버에 실제 Bearer 토큰으로 요청:
+  - 개인 구독 `{childId}` → `{ refundAmount: 9900, reason: "company_fault" }`
+  - Family `{family:true}` → `{ refundAmount: 19900, reason: "company_fault" }`
+  - 둘 다 7일 창을 벗어난 기간인데도 일할계산이 아니라 전액환불로 응답 — 회사 귀책
+    오버라이드가 기존 기간·사용여부 로직보다 우선한다는 것을 실제 응답으로 확인.
+- 임시 계정·구독·payments·family_groups는 검증 직후 전부 삭제, 검증에 쓴 스크립트도
+  커밋하지 않고 삭제.
 
 ### 의도적으로 제외한 것
 
