@@ -25,13 +25,13 @@ type ContentModuleRow = {
     explain?: { ko?: string };
   } | null;
   source_example: string | null;
+  is_premium: boolean;
 };
 
 /**
  * content_modules 행을 content/examples/*.json과 같은 Example 모양으로 변환한다.
- * ⚠️ content_modules에는 아직 is_premium 컬럼이 없다 — 관리자 승인을 거친 DB 콘텐츠는
- * 지금은 전부 무료로 취급한다(판단 근거: 2026-08-20 대화, 향후 프리미엄 DB 콘텐츠가
- * 필요해지면 컬럼 추가 + gate.ts 연동을 함께 해야 함).
+ * is_premium은 관리자가 검수 승인 시점에 결정한 값을 그대로 반영한다(2026-08-21,
+ * content_modules.is_premium 컬럼 추가 — 그 전엔 전부 false로 하드코딩돼 있었음).
  */
 function mapRowToExample(row: ContentModuleRow): Example | null {
   const candidate = {
@@ -55,7 +55,7 @@ function mapRowToExample(row: ContentModuleRow): Example | null {
       explain: row.quiz?.explain?.ko ?? "",
     },
     sourceExample: row.source_example ?? undefined,
-    isPremium: false,
+    isPremium: row.is_premium,
   };
 
   const result = ExampleSchema.safeParse(candidate);

@@ -13,6 +13,7 @@ export const POST = withErrorHandling(async (req: NextRequest, ctx: { params: Pr
   const body = await req.json().catch(() => null);
   const action: "approve" | "reject" | undefined = body?.action;
   const note: string | undefined = body?.note;
+  const isPremium: boolean = body?.isPremium === true;
 
   if (action !== "approve" && action !== "reject") {
     return NextResponse.json(
@@ -50,6 +51,9 @@ export const POST = withErrorHandling(async (req: NextRequest, ctx: { params: Pr
       reviewed_by: user.id,
       review_note: note ?? null,
       updated_at: new Date().toISOString(),
+      // 유료 여부는 승인(published) 시점에 관리자가 결정한다 — 반려(withdrawn)는 판매되지
+      // 않으니 그때 보낸 isPremium 값과 무관하게 승인일 때만 반영한다.
+      ...(action === "approve" ? { is_premium: isPremium } : {}),
     })
     .eq("id", id);
 

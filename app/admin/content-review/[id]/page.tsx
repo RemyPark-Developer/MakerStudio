@@ -33,6 +33,7 @@ type ContentModule = {
   status: string;
   retry_count: number;
   last_error: string | null;
+  is_premium: boolean;
 };
 
 type ChatMsg = { id: string; role: "admin" | "assistant"; content: string; created_at: string };
@@ -52,6 +53,7 @@ export default function ContentReviewDetailPage() {
   const [actionBusy, setActionBusy] = useState(false);
   const [note, setNote] = useState("");
   const [actionMsg, setActionMsg] = useState<string | null>(null);
+  const [isPremium, setIsPremium] = useState(false);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -62,7 +64,10 @@ export default function ContentReviewDetailPage() {
         if (res.status === 404) { setNotFound(true); return Promise.reject(404); }
         return res.ok ? res.json() : Promise.reject(res.status);
       })
-      .then((data) => setModule(data.module))
+      .then((data) => {
+        setModule(data.module);
+        setIsPremium(Boolean(data.module?.is_premium));
+      })
       .catch(() => {});
 
     authedFetch(`/api/content/${params.id}/review-chat`)
@@ -116,7 +121,13 @@ export default function ContentReviewDetailPage() {
 
   async function handleReview(action: "approve" | "reject") {
     if (action === "reject" && !confirm("정말 반려하시겠어요?")) return;
-    if (action === "approve" && !confirm("승인하면 즉시 웹사이트에 공개됩니다. 진행할까요?")) return;
+    if (
+      action === "approve" &&
+      !confirm(
+        `승인하면 즉시 웹사이트에 ${isPremium ? "유료(Premium)" : "무료"} 콘텐츠로 공개됩니다. 진행할까요?`
+      )
+    )
+      return;
 
     setActionBusy(true);
     setActionMsg(null);
@@ -124,7 +135,7 @@ export default function ContentReviewDetailPage() {
       const res = await authedFetch(`/api/content/${params.id}/review`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, note: note.trim() || undefined }),
+        body: JSON.stringify({ action, note: note.trim() || undefined, isPremium }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -278,6 +289,14 @@ export default function ContentReviewDetailPage() {
           placeholder="검수 메모 (선택, 반려 사유 등)"
           style={{ width: "100%", minHeight: 70, padding: 10, borderRadius: 8, border: "1px solid var(--line-strong)", fontSize: 13 }}
         />
+        <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, fontSize: 13 }}>
+          <input
+            type="checkbox"
+            checked={isPremium}
+            onChange={(e) => setIsPremium(e.target.checked)}
+          />
+          유료(Premium) 콘텐츠로 설정 — 승인 시 code/설명은 구독자에게만 공개돼요
+        </label>
         <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
           <button onClick={() => handleReview("approve")} disabled={actionBusy} className="btn btnCoral">
             승인 → 게시
