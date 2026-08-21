@@ -1,10 +1,11 @@
 # MakerStudio MVP 범위 정의서 (외주 개발용)
 
-**버전**: v1.10 · **최종 수정**: 2026-08-22 · **짝 파일**: `MakerStudio_Project_Design_v2.4.md`
+**버전**: v1.11 · **최종 수정**: 2026-08-22 · **짝 파일**: `MakerStudio_Project_Design_v2.4.md`
 
 ### 개정 이력
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| v1.11 | 2026-08-22 | Premium VIP 요금제(월 ₩100,000) 신설 — 이 문서를 포함해 저장소 어디에도 없던 신규 트랙(어제 확인한 "VIP는 정의된 적 없음"과 별개로, 오늘 대표님이 실제로 도입 결정). "AI 초안 + admin 승인 후 발송" 비동기 멘토링, `subscriptions.plan`에 `premium_vip` 추가(`0035`), `vip_mentor_requests` 테이블. 상세는 `DB_Schema_v1.0.md` §4(`learning` 도메인) 참고 |
 | v1.10 | 2026-08-22 | 가격 정책 페이지(`/pricing`) 신설 — 이전엔 이 문서에 스코프된 적 없던 항목. Premium 메인/Family 보조 노출 + 출시 알림 신청(`waitlist_emails`, `0034`). 상세는 `DB_Schema_v1.0.md` §5 참고. **VIP 요금제는 이 문서를 포함해 저장소 어디에도 정의된 적이 없었음을 이번에 확인** — §4.3 실제 5-트랙(Free/Premium개인/Family/낱개코스/Classroom)에 VIP는 없음 |
 | v1.9 | 2026-08-21 | 관리자 대시보드(매출·요금제별 고객수/비율/이탈률·최근 6개월 매출 추이) 신설 — 이전엔 이 문서에 스코프된 적 없던 항목, `app/admin/dashboard` + 집계 뷰 3개(`0033`)로 구현 |
 | v1.8 | 2026-08-21 | 회사 귀책(중복결제·시스템오류) 전액환불 자동화 완료 — `payments.refund_reason`(0031) 추가, `refund/calculate`가 세팅된 결제 건을 기간·사용여부 무관 전액환불하도록 확장(개인/Family 공통). Won't 표에서 해당 항목 제거. 상세는 `DB_Schema_v1.0.md` §2(`payments`) 참고 |
@@ -46,6 +47,7 @@
 | 계정 삭제 | **Must** | 법적 의무(개인정보보호법) — 제외 불가 |
 | 학습 화면 (콘텐츠 뷰어+AI튜터+퀴즈) | Should | 인라인 코드 에디터는 간이 검증 버전(Wokwi는 Won't). AI 튜터 아동 안전장치는 2026-08-20 추가(§기능 원칙) |
 | 요금제 (Free/Premium 개인 + Family 최대 6명까지 좌석 추가) | Should | B2B는 Won't. Family는 2026-08-20 Won't→Should로 승격(v1.3). 결제내역·환불 계산·해지·좌석 추가/축소·회사 귀책 전액환불까지 전부 완료(2026-08-21) |
+| Premium VIP (월 ₩100,000, AI초안+admin승인 비동기 멘토링) | Should | 2026-08-22 신설. 제출·AI초안·관리자 승인+발송·월 4회 한도·학생/보호자 열람 화면까지 완료. VIP 구독자는 일반 Premium 콘텐츠도 함께 이용 가능(`hasPremiumAccess()` 확장) |
 | 체크아웃 / 결제실패·재시도 | Should | 포트원 연동 |
 | 가격 정책 페이지 (`/pricing`) | Should | 2026-08-22 신설. Premium 메인/Family 보조 노출, 다크패턴 금지 원칙 적용, 출시 알림 신청(`waitlist_emails`) |
 | 구독 해지 | **Must** | 법적 의무(§4.5) — 제외 불가 |

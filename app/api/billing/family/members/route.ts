@@ -61,6 +61,10 @@ export const GET = withErrorHandling(async (req: NextRequest) => {
       : null,
     members: linked.filter((c) => memberChildIds.includes(c.childId)),
     eligibleChildren: linked.filter((c) => !memberChildIds.includes(c.childId)),
+    // Family 가입 여부와 무관하게 guardian_child_links 전체 — mypage/billing의 VIP
+    // 카드(자녀별 "VIP 시작하기" 버튼)가 재사용한다(2026-08-22, 0035). Family와 VIP는
+    // 서로 배타적이지 않은 별개 요금제라 eligibleChildren(family 미가입 자녀)과는 다르다.
+    linkedChildren: linked,
   });
 });
 

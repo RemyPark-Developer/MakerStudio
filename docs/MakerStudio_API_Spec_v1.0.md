@@ -50,7 +50,7 @@
 | POST | `/api/billing/family/members` | ✓ (guardian) | `{childId}` → family_group에 추가. 서버가 `guardian_child_links`로 법적 관계를 먼저 검증(`lib/billing/familyMembership.ts`) |
 | DELETE | `/api/billing/family/members/:childId` | ✓ (guardian) | family_group 멤버십만 제거 (`guardian_child_links`는 유지) |
 | POST | `/api/billing/family/cancel` | ✓ (guardian) | Family 해지. `subscription/cancel`과 동일 원칙 — 즉시 끊지 않고 결제주기 종료일까지 유지(§4.3, 2026-08-20 추가) |
-| POST | `/api/billing/checkout` | ✓ (guardian) | `{planId, paymentMethod}` → 포트원 결제창 세션 생성. `planId`는 `premium`\|`family`\|`family_extra_seat`(좌석 추가, ₩4,900/좌석, 2026-08-20 추가, 그 결제주기만 유효). **학생(role=student_child) 토큰으로 호출 시 무조건 `403`** (§3.2 "학생 화면엔 결제 버튼 없음" 원칙을 서버에서도 강제) |
+| POST | `/api/billing/checkout` | ✓ (guardian) | `{planId, paymentMethod}` → 포트원 결제창 세션 생성. `planId`는 `premium`\|`premium_vip`(월 ₩100,000, 2026-08-22 추가)\|`family`\|`family_extra_seat`(좌석 추가, ₩4,900/좌석, 2026-08-20 추가, 그 결제주기만 유효). **학생(role=student_child) 토큰으로 호출 시 무조건 `403`** (§3.2 "학생 화면엔 결제 버튼 없음" 원칙을 서버에서도 강제). 실제로는 `app/checkout/page.tsx`가 브라우저에서 직접 포트원 SDK를 호출하는 구조라, 서버 라우트는 `app/api/billing/checkout/verify`(결제 검증)만 존재 — 이 표의 경로명은 실제 구현과 다르다(기존부터 있던 문서-코드 불일치, 이번 작업 범위 밖) |
 | POST | `/api/billing/webhook/portone` | ✕ (포트원 서명 검증으로 대체) | PG사 웹훅 수신. 결제 성공/실패에 따라 구독 상태 갱신 + `notifications` 도메인에 이벤트 발행 |
 | POST | `/api/billing/subscription/cancel` | ✓ (guardian) | 즉시 해지 예약, 현재 결제주기 종료일까지는 유지(§4.3) |
 | POST | `/api/billing/subscription/retry` | ✓ (guardian) | 결제 실패 후 재시도 |
@@ -89,6 +89,17 @@
 | GET | `/api/learning/wishlist` | ✓ | **Could 항목** — 찜한 키트 목록. 협상 결과 제외되면 이 엔드포인트 전체 제거하고 클라이언트 로컬 상태로 대체 |
 | POST/DELETE | `/api/learning/wishlist/:kitId` | ✓ | 찜 추가/제거 (Could) |
 | POST | `/api/learning/quiz/submit` | ✓ | `{exampleId, answer}` → 정답 여부 반환 |
+
+**Premium VIP 멘토링(2026-08-22, 0035)** — "AI 초안 + admin 승인 후 발송" 구조. AI가
+사람인 척 단독으로 응답을 보내는 것은 절대 금지(표시광고법 허위광고 리스크 + 정직성 원칙).
+
+| Method | Path | 인증 | 설명 |
+|---|---|---|---|
+| POST | `/api/learning/vip/submit` | ✓ (student, `premium_vip` 구독자만) | `{submissionContent}` → 안전필터(`checkInputSafety`) 통과 시 저장 + AI 초안 동기 생성. 월 4회 초과 시 `429`. 안전필터에 걸리면 `{blocked:true}` 응답, 한도 안 깎임 |
+| GET | `/api/learning/vip/my-requests` | ✓ (student 본인 또는 guardian, `?childId=`) | `ai_draft_feedback`은 응답에 아예 없음(관리자 승인 전 절대 노출 안 함). `finalFeedback`은 `status='sent'`일 때만 채워짐 |
+| GET | `/api/learning/vip/admin` | ✓ (admin) | 목록, `?status=pending\|sent\|all` |
+| GET | `/api/learning/vip/admin/:id` | ✓ (admin) | 상세(제출 원문 + AI 초안) |
+| POST | `/api/learning/vip/admin/:id/approve-and-send` | ✓ (admin) | `{finalFeedback}` → 확정 저장 + `status:'sent'`(중간 `approved` 상태를 거치지 않고 한 번의 클릭으로) + guardian에게 `vip_feedback_sent` 알림. 이미 발송된 건은 `409` |
 
 ---
 

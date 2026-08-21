@@ -19,6 +19,12 @@ const PLAN_COPY: Record<string, { orderName: string; title: string; description:
     description:
       "최대 3명의 자녀 계정이 함께 Premium을 이용할 수 있어요. 결제 후 마이페이지에서 자녀를 추가/제거할 수 있어요.",
   },
+  premium_vip: {
+    orderName: "MakerStudio Premium VIP 구독",
+    title: `Premium VIP — ₩${PLAN_PRICES.premium_vip.toLocaleString()}/월`,
+    description:
+      "일반 Premium 콘텐츠 전체 이용 + 월 4회 비동기 프로젝트 멘토링(AI 초안을 전문 검수자가 직접 확인·수정 후 전달). 언제든 해지할 수 있고, 해지해도 남은 기간은 계속 이용할 수 있어요.",
+  },
   family_extra_seat: {
     orderName: "MakerStudio Family 좌석 추가",
     title: `Family 좌석 추가 — ₩${PLAN_PRICES.family_extra_seat.toLocaleString()}`,

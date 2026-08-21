@@ -59,7 +59,7 @@ Supabase는 이메일·비밀번호·소셜 로그인을 처리하는 `auth.user
 | id | uuid, PK | |
 | guardian_id | uuid, FK → profiles.id | 결제 주체 — 반드시 role=guardian만 (§3.2 서버 검증 필수) |
 | child_id | uuid, FK → profiles.id | 혜택을 받는 자녀 계정 |
-| plan | text | `free` \| `premium` (개인 요금제만. Family는 아래 `family_groups` 별도 테이블) |
+| plan | text | `free` \| `premium` \| `premium_vip`(2026-08-22, 0035) — 개인 요금제만. Family는 아래 `family_groups` 별도 테이블. `free`는 실제 row가 생성된 적 없음(§2 관리자 대시보드 참고) |
 | status | text | `active` \| `canceled` \| `past_due` |
 | current_period_start | timestamptz | |
 | current_period_end | timestamptz | 해지해도 이 시점까지 유지(§4.3) |
@@ -291,6 +291,43 @@ select 허용, 0030에서 `is_premium=false` 조건 추가) + 테이블 단위 G
 도메인 하위(`lib/learning/tutorSafety.ts`)에 뒀다. 제외한 것: 주소 PII 감지(정규식 신뢰도 낮음),
 주제 이탈 하드 차단(시스템 프롬프트 지시로만 대응), 보호자 신고 UI(로그+자동알림까지만).
 
+### `vip_mentor_requests` (`0035_vip_mentor_program.sql`, 2026-08-22 Premium VIP 요금제)
+
+Premium VIP(월 ₩100,000) — 학생이 프로젝트/코드를 제출하면 AI가 초안을 쓰고, **반드시
+admin이 검토·수정한 뒤에만** 학생/보호자에게 전달된다. AI가 사람인 척 전부 처리하는 건
+표시광고법 허위광고 리스크이자 이 프로젝트의 정직성 원칙 위반이라 명시적으로 금지 —
+`app/api/learning/vip/admin/[id]/approve-and-send`를 거치지 않고는 `final_feedback`이
+절대 채워지지 않는다.
+
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| id | uuid, PK | |
+| user_id | uuid, FK → profiles.id | 제출한 학생(student_child/student_teen) |
+| submission_content | text, ≤8000자 | `flagged=true`면 원문이 아니라 치환된 텍스트(`tutor_messages`와 동일 원칙) |
+| ai_draft_feedback | text, nullable | AI 초안. **학생/보호자에게 절대 직접 노출되지 않음**(`GET /api/learning/vip/my-requests` 응답에 이 필드 자체가 없음) |
+| final_feedback | text, nullable | admin이 확정한 최종본. `status='sent'`일 때만 학생/보호자 화면에 노출 |
+| status | text | `submitted`→`ai_drafted`→(`approved`)→`sent`. **정상 플로우에서는 `approved`를 거치지 않고 곧장 `sent`로 간다**(승인+발송을 한 클릭으로 통합, 대표님 지시) — `approved`는 나중에 "승인만 하고 발송 보류"가 필요해질 때를 위해 체크 제약에만 남겨둠 |
+| flagged / flag_reason | boolean / text | `lib/learning/tutorSafety.ts`의 `checkInputSafety()` 재사용. 걸리면 Anthropic 호출 자체를 안 해서 월 4회 한도도 안 깎임 |
+| reviewed_by / reviewed_at | uuid / timestamptz | 승인+발송한 admin |
+
+**RLS**: 학생 본인 select만(`user_id = auth.uid()`), admin은 전체 select. guardian이
+자녀 것을 보는 경로는 RLS로 안 됨(guardian ≠ 제출자) — `my-requests` API가
+`guardian_child_links`로 관계를 먼저 확인한 뒤 service_role로 조회. 쓰기는 전부
+service_role(API 라우트)에서만.
+
+**월 4회 제출 한도**(`lib/learning/vipQuota.ts`): `flagged=false`인 이번 달(UTC 기준) 행만
+카운트 — 안전필터에 걸린 시도는 Anthropic을 호출하지 않으니 한도에서 제외(AI 튜터 quota와
+동일 원칙).
+
+**`subscriptions.plan`에 `premium_vip` 추가**(같은 마이그레이션) — `lib/content/gate.ts`의
+`hasPremiumAccess()`도 `plan in ('premium','premium_vip')`로 확장해서, VIP 구독자가
+일반 Premium 콘텐츠에서 오히려 잠기는 일이 없게 함(VIP는 Premium의 상위 호환). Family
+경유는 없음 — VIP는 개인 구독 전용(`hasVipAccess()`가 별도로 확인).
+
+**실증 검증(2026-08-22)**: 임시 계정으로 제출→PII 차단→월4회 한도(4번째 성공/5번째 429)→
+AI초안 생성→관리자 승인+발송→학생/보호자 화면에서 최종본 확인까지 전 구간, `hasPremiumAccess()`
+확장까지 실제 API 호출로 검증 완료(총 22개 체크 통과).
+
 ---
 
 ## 5. `notifications` 도메인 (2026-08-20 실제 구현, 0016_notification_delivery.sql)
@@ -304,7 +341,7 @@ select 허용, 0030에서 `is_premium=false` 조건 추가) + 테이블 단위 G
 |---|---|---|
 | id | uuid, PK | |
 | user_id | uuid, FK → profiles.id | 항상 guardian — 아동 계정에는 직접 알림을 보내지 않는다(§3.2와 같은 맥락) |
-| type | text | `payment_success` \| `payment_activation_failed` \| `payment_failed` \| `subscription_canceled` \| `family_member_added` \| `family_member_removed` \| `child_chat_flagged` (check 제약 없음, 자유 텍스트) |
+| type | text | `payment_success` \| `payment_activation_failed` \| `payment_failed` \| `subscription_canceled` \| `family_member_added` \| `family_member_removed` \| `child_chat_flagged` \| `family_seat_added` \| `family_seat_reduced` \| `vip_feedback_sent` \| `vip_submission_flagged`(2026-08-22, 0035) (check 제약 없음, 자유 텍스트) |
 | message | text | |
 | action_url | text, nullable | |
 | read_at | timestamptz, nullable | |

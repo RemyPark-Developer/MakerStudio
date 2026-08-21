@@ -11,7 +11,9 @@ export type NotificationType =
   | "family_member_removed"
   | "child_chat_flagged"
   | "family_seat_added"
-  | "family_seat_reduced";
+  | "family_seat_reduced"
+  | "vip_feedback_sent"
+  | "vip_submission_flagged";
 
 export type Channel = "email" | "sms";
 
@@ -35,6 +37,10 @@ export const CHANNELS_BY_TYPE: Record<NotificationType, Channel[]> = {
   child_chat_flagged: ["email", "sms"],
   family_seat_added: ["email"],
   family_seat_reduced: ["email"],
+  // VIP 멘토링(0035) — payment_failed/child_chat_flagged 수준의 긴급 채널까진 아니라고
+  // 판단해 email만(2026-08-22 결정, 필요해지면 sms 추가 검토).
+  vip_feedback_sent: ["email"],
+  vip_submission_flagged: ["email"],
 };
 
 const SUBJECT_BY_TYPE: Record<NotificationType, string> = {
@@ -46,6 +52,8 @@ const SUBJECT_BY_TYPE: Record<NotificationType, string> = {
   family_member_removed: "Family 그룹에서 아이가 제거됐어요",
   child_chat_flagged: "자녀의 AI 튜터 대화에서 확인이 필요한 내용이 있어요",
   family_seat_added: "Family 좌석이 추가됐어요",
+  vip_feedback_sent: "VIP 멘토 피드백이 도착했어요",
+  vip_submission_flagged: "자녀의 VIP 제출물에서 확인이 필요한 내용이 있어요",
   family_seat_reduced: "Family 좌석이 정리됐어요",
 };
 

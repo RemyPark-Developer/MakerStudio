@@ -52,6 +52,7 @@ Claude Code가 이 저장소에서 작업할 때 항상 먼저 읽어야 하는 
 - `app/api/tutor/route.ts` — AI 튜터, **로그인 필수**(2026-08-13 결정), `lib/rate-limit-db.ts`(DB 기반, user_id 기준) 사용. 시스템 프롬프트에 예제 범위 밖 질문 거절 규칙 포함.
 - `lib/client-auth.ts` (`authedFetch`) — **인증이 필요한 API를 클라이언트에서 호출할 땐 항상 이 함수를 써야 함, 원시 `fetch`+수동 헤더 방식 금지.** 액세스 토큰 만료(기본 1시간) 시 자동으로 리프레시 토큰으로 갱신 후 재시도한다. **동시에 여러 요청이 401을 받아도 갱신은 1번만 일어나도록 락이 걸려있음(2026-08-13 경쟁조건 버그 수정) — 이 락을 제거하지 말 것.**
 - `lib/api-error-handler.ts` (`withErrorHandling`) — **모든 API 라우트는 이걸로 감싸야 함.** 안 감싸면 예상 못 한 예외가 HTML 에러 페이지로 나가서 클라이언트에 "서버에 연결할 수 없어요" 같은 오해를 주는 메시지가 뜬다(2026-08-13 실사용자 테스트 중 발견). **새 라우트를 만들 때 이 패턴을 반드시 따를 것.**
+- **Premium VIP 요금제(월 ₩100,000, 2026-08-22, `0035`)** — `subscriptions.plan`에 `premium_vip` 추가, `vip_mentor_requests` 테이블. "AI 초안 + admin 승인 후 발송" 구조 — `app/api/learning/vip/admin/[id]/approve-and-send`를 거치지 않고는 `final_feedback`이 절대 채워지지 않는다(AI 단독 응답 절대 금지, 표시광고법 허위광고 리스크 + 정직성 원칙). `app/api/learning/vip/submit`(학생 제출, 월 4회 한도, `lib/learning/tutorSafety.ts` 안전필터 재사용), `app/admin/vip-review`(관리자 검수, `content-review`와 동일 패턴), `app/mypage/vip`(학생 본인 + guardian 열람), `app/mypage/billing`에 자녀별 VIP 카드. **`lib/content/gate.ts`의 `hasPremiumAccess()`가 `premium_vip`도 인정하도록 확장됨** — VIP 구독자는 일반 Premium 콘텐츠도 함께 이용 가능(새 게이팅 로직 짤 때 이 포함 관계 기억할 것). `hasVipAccess()`는 Family 경유 없음(개인 구독 전용).
 
 ## 아직 결정 안 된 것
 
@@ -64,6 +65,7 @@ Claude Code가 이 저장소에서 작업할 때 항상 먼저 읽어야 하는 
 - ~~회사 귀책(중복결제·시스템오류) 전액환불 자동 판별~~ — 2026-08-21 완료(`payments.refund_reason`, `0031`). `refund_reason`을 세팅하는 admin API/화면은 여전히 없음(SQL Editor로 수동) — 필요해지면 별도 작업.
 - Family→Premium/Free 요금제 티어 전환, 구독/Family 만료 임박 알림(cron 인프라 필요), 콘텐츠 검수 승인/반려 알림(비-admin 제출 플로우 필요) — 전부 의도적으로 보류된 항목, 대표님이 먼저 꺼낼 때 시작. 각각의 판단 근거는 `~/.claude/projects/-workspaces-MakerStudio/memory/`의 project 메모리 참고.
 - §6.3-a 개선판(v2) 콘텐츠를 실제로 다르게 편집하는 UI — "개선판 만들기" 버튼은 v1을 그대로 복제한 draft만 만든다(2026-08-21, `content_modules.slug`/`0032`). 지금은 검수 화면에 편집 폼이 없어서, 내용을 실제로 바꾸려면 반려 후 `generate` 파이프라인으로 다시 만들거나 관리자가 DB를 직접 고치는 수밖에 없다.
+- VIP "승인만 하고 발송 보류" UI — 지금은 "승인 후 발송"이 한 클릭으로 묶여있다(대표님 지시, 2026-08-22). `vip_mentor_requests.status`엔 `approved` 값이 체크 제약에 남아있지만 정상 플로우에서 실제로는 안 거쳐간다.
 - (**"나머지 화면 이식"은 2026-08-20 기준 사실상 완료** — `guardian_child_links` 실제 연결 로직도 2026-08-18에 이미 구현됨. 이 섹션이 예전엔 이 두 개를 "미완료"로 적어뒀었는데, 실제로는 끝나 있었던 걸 2026-08-20에 발견함 — 이 파일도 코드만큼 자주 낡을 수 있다는 반증이니 의심되면 실제 코드/커밋을 먼저 확인할 것.)
 
 ## 지금 뭘 해야 하는지 모르겠으면

@@ -22,6 +22,7 @@ export default function BillingPage() {
   const [familyGroup, setFamilyGroup] = useState<FamilyGroup>(null);
   const [familyMembers, setFamilyMembers] = useState<FamilyChild[] | null>(null);
   const [eligibleChildren, setEligibleChildren] = useState<FamilyChild[] | null>(null);
+  const [linkedChildren, setLinkedChildren] = useState<FamilyChild[] | null>(null);
   const [familyMsg, setFamilyMsg] = useState<string | null>(null);
   const [familyBusy, setFamilyBusy] = useState(false);
   const [familyCancelMsg, setFamilyCancelMsg] = useState<string | null>(null);
@@ -34,11 +35,13 @@ export default function BillingPage() {
         setFamilyGroup(data.familyGroup ?? null);
         setFamilyMembers(data.members ?? []);
         setEligibleChildren(data.eligibleChildren ?? []);
+        setLinkedChildren(data.linkedChildren ?? []);
       })
       .catch(() => {
         setFamilyGroup(null);
         setFamilyMembers([]);
         setEligibleChildren([]);
+        setLinkedChildren([]);
       });
   }
 
@@ -315,6 +318,37 @@ export default function BillingPage() {
           </>
         )}
         {familyMsg && <p className="muted" style={{ marginTop: 10 }}>{familyMsg}</p>}
+      </div>
+
+      <div className="card">
+        <div className="tab coral">Premium VIP</div>
+        <h2>비동기 프로젝트 멘토링 (₩100,000/월)</h2>
+        <p className="muted" style={{ marginBottom: 12 }}>
+          일반 Premium 콘텐츠 전체 이용 + 월 4회, 제출한 프로젝트/코드에 대해 전문 검수자가
+          직접 확인·수정한 피드백을 받아요(AI 초안을 사람이 검토 후 전달 — AI가 혼자 답하지
+          않아요). 자녀별로 개별 구독해요.
+        </p>
+        {linkedChildren === null ? (
+          <p className="muted">불러오는 중...</p>
+        ) : linkedChildren.length === 0 ? (
+          <p className="muted">보호자 인증을 마친 자녀가 없어요.</p>
+        ) : (
+          linkedChildren.map((c) => (
+            <div
+              key={c.childId}
+              style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid var(--grid-line)" }}
+            >
+              <span>{c.nickname}</span>
+              <Link
+                href={`/checkout?childId=${c.childId}&plan=premium_vip`}
+                className="btn btnCoral"
+                style={{ padding: "4px 10px", fontSize: 12.5 }}
+              >
+                VIP 시작하기
+              </Link>
+            </div>
+          ))
+        )}
       </div>
     </main>
   );

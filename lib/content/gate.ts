@@ -47,11 +47,14 @@ async function hasPremiumAccess(user: AuthedUser | null): Promise<boolean> {
     // 'canceled'로 바꾸므로, 여기서 status까지 걸러버리면 "해지해도 잔여기간은
     // 이용 가능"이라는 안내 문구와 실제 동작이 어긋난다(2026-08-20 발견·수정).
     // 접근을 끊어야 하는 건 status가 아니라 current_period_end가 지났을 때뿐이다.
+    // premium_vip도 일반 Premium 콘텐츠 접근권을 포함한다(2026-08-22) — VIP가 Premium보다
+    // 상위 호환이라 월 ₩100,000 VIP 구독자가 오히려 ₩9,900 Premium 콘텐츠를 못 보는
+    // 일이 있으면 안 된다.
     const { data, error } = await supabase
       .from("subscriptions")
       .select("plan, current_period_end")
       .eq("child_id", user.id)
-      .eq("plan", "premium")
+      .in("plan", ["premium", "premium_vip"])
       .gte("current_period_end", new Date().toISOString())
       .maybeSingle();
 
@@ -81,6 +84,31 @@ async function hasFamilyPlanAccess(childId: string): Promise<boolean> {
 
     // ⚠️ 위 hasPremiumAccess와 동일한 이유로 status는 안 본다 — 해지해도 잔여기간까지는 접근 유지.
     return group.current_period_end >= new Date().toISOString();
+  } catch {
+    // ⚠️ 확인 안 되면 무조건 잠금 — hasPremiumAccess와 같은 원칙.
+    return false;
+  }
+}
+
+/**
+ * Premium VIP(월 ₩100,000, 비동기 AI초안+관리자승인 멘토링) 구독 여부.
+ * hasPremiumAccess()와 달리 Family 경유는 없다 — VIP는 개인 구독 전용(요금제 설계상
+ * Family ₩19,900에 VIP 서비스가 딸려오면 안 됨).
+ */
+export async function hasVipAccess(user: AuthedUser | null): Promise<boolean> {
+  if (!user) return false;
+
+  try {
+    const supabase = getSupabaseServerClient();
+    const { data, error } = await supabase
+      .from("subscriptions")
+      .select("plan, current_period_end")
+      .eq("child_id", user.id)
+      .eq("plan", "premium_vip")
+      .gte("current_period_end", new Date().toISOString())
+      .maybeSingle();
+
+    return !error && !!data;
   } catch {
     // ⚠️ 확인 안 되면 무조건 잠금 — hasPremiumAccess와 같은 원칙.
     return false;
