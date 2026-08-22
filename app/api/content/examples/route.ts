@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { listAllExamples } from "@/lib/content/listExamples";
+import { getContentStats } from "@/lib/content/contentStats";
 import { withErrorHandling } from "@/lib/api-error-handler";
 
 // 관리자 승인 즉시 목록에 반영되어야 하므로 절대 정적 생성하지 않는다 (Design.md §7.2와 같은 원칙).
@@ -29,16 +30,24 @@ export const GET = withErrorHandling(async (req: NextRequest) => {
       ? [...result].sort((a, b) => a.label.localeCompare(b.label))
       : [...result].sort((a, b) => a.difficulty - b.difficulty);
 
-  const examples = result.map(({ id, icon, label, board, difficulty, estimatedMinutes, intro, isPremium }) => ({
-    id,
-    icon,
-    label,
-    board,
-    difficulty,
-    estimatedMinutes,
-    intro,
-    isPremium,
-  }));
+  const stats = await getContentStats(result.map((e) => e.id));
+
+  const examples = result.map(({ id, icon, label, board, difficulty, estimatedMinutes, intro, isPremium }) => {
+    const s = stats.get(id)!;
+    return {
+      id,
+      icon,
+      label,
+      board,
+      difficulty,
+      estimatedMinutes,
+      intro,
+      isPremium,
+      viewCount: s.viewCount,
+      avgRating: s.avgRating,
+      ratingCount: s.ratingCount,
+    };
+  });
 
   return NextResponse.json({ examples });
 });

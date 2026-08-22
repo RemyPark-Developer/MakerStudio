@@ -3,6 +3,7 @@ import { codeToHtml } from "shiki";
 import { getExampleById } from "@/lib/content";
 import { getPublishedModuleForUser } from "@/lib/content/publishedModules";
 import { gateExample } from "@/lib/content/gate";
+import { getContentStats } from "@/lib/content/contentStats";
 import { getAuthedUser } from "@/lib/supabase/auth-context";
 import { withErrorHandling } from "@/lib/api-error-handler";
 
@@ -23,12 +24,15 @@ export const GET = withErrorHandling(
 
     const gated = await gateExample(example, user);
 
+    // 통계는 Premium 게이팅과 무관 — 잠긴 콘텐츠가 아니라 항상 포함한다.
+    const stats = (await getContentStats([example.id])).get(example.id)!;
+
     // 잠금 해제된 콘텐츠에 한해서만 서버에서 하이라이팅한다 — 잠긴 상태에선 code 필드 자체가 없음(§7.2).
     if (!gated.locked && gated.code) {
       const codeHtml = await codeToHtml(gated.code, { lang: "cpp", theme: "github-dark" });
-      return NextResponse.json({ ...gated, codeHtml });
+      return NextResponse.json({ ...gated, codeHtml, ...stats });
     }
 
-    return NextResponse.json(gated);
+    return NextResponse.json({ ...gated, ...stats });
   }
 );

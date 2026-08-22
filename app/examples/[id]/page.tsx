@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { QuizBlock } from "./QuizBlock";
 import { AiTutorPanel } from "./AiTutorPanel";
+import { RatingWidget } from "./RatingWidget";
 
 type GatedExample = {
   id: string;
@@ -25,6 +26,9 @@ type GatedExample = {
   codeHtml?: string;
   codeFilename?: string;
   explain?: string;
+  viewCount: number;
+  avgRating: number | null;
+  ratingCount: number;
 };
 
 export default function ExamplePage() {
@@ -75,6 +79,10 @@ export default function ExamplePage() {
         <span className="pill">난이도 {"★".repeat(data.difficulty)}</span>
         <span className="pill">예상시간 {data.estimatedMinutes}분</span>
         <span className="pill">{data.board}</span>
+        <span className="pill">👁 {data.viewCount.toLocaleString()}</span>
+        {data.avgRating !== null && (
+          <span className="pill">⭐ {data.avgRating.toFixed(1)} ({data.ratingCount})</span>
+        )}
         {data.isPremium && (
           <span className="pill" style={{ background: "var(--sage-pale)", color: "var(--sage-dark)", fontWeight: 700 }}>
             🔒 Premium
@@ -151,6 +159,12 @@ export default function ExamplePage() {
         <div className="tab coral">M1 · 응용 미션</div>
         <h3>미션</h3>
         <p>{data.mission}</p>
+      </div>
+
+      <div className="card">
+        <div className="tab">평가</div>
+        <h3>이 콘텐츠는 어땠나요?</h3>
+        <RatingWidget exampleId={params.id} avgRating={data.avgRating} ratingCount={data.ratingCount} />
       </div>
 
       {!data.locked && data.quiz && (
