@@ -8,6 +8,19 @@ RLS, VIP 요금제, 데이터 보관 정책, 소셜 로그인 등 큰 기능들�
 설계 판단/검증 방법은 `docs/MakerStudio_Session_2026-08-2{0,1,2}_Summary_*.md`에 있음 — 여기선
 간략하게만 기록.
 
+## v2.37 — 2026-08-23
+
+**요약**: 결제 재시도 — 전용 API 대신 기존 알림(`notifications`)을 재사용해 `/mypage/billing`에
+실패 배너 추가. `API_Spec.md`의 미구현 `retry` 엔드포인트 항목 정정.
+
+- 변경: `app/mypage/billing/page.tsx` — 로드 시 `GET /api/notifications`에서 안 읽은
+  `payment_failed`/`payment_activation_failed` 알림을 찾아 상단에 배너로 노출(`action_url`
+  재시도 링크 + "확인했어요" 버튼은 기존 `PATCH /api/notifications/:id/read` 재사용)
+- 새 스키마·새 API 없음 — 일회성 브라우저 결제 구조라 서버가 대신 재결제할 방법이 없어서,
+  전용 `POST /api/billing/subscription/retry`는 만들지 않기로 결정
+- 변경: `docs/MakerStudio_API_Spec_v1.0.md`(v1.2), `docs/MakerStudio_Dev_Sequence_v1.0.md`(v1.2) —
+  예전부터 적혀 있던 미구현 `retry` 엔드포인트 항목을 실제 동작(알림 재사용)으로 정정
+
 ## v2.36 — 2026-08-23
 
 **요약**: 카카오 로그인 보류 상태 기록(코드 변경 없음, 상태 공유용).

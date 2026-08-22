@@ -1,6 +1,8 @@
 # MakerStudio API 명세서 (MVP 범위)
 
-**버전**: v1.1 · **작성일**: 2026-08-13 · **최종 수정**: 2026-08-22(전 도메인 실제 라우트와 대조해 누락·불일치 정정 — `identity/refresh`, `content` 도메인 관리자 라우트 5개, `learning/tutor-history` 추가, `/api/learning/tutor`→`/api/tutor`·`/api/learning/quiz/submit`→`/api/learning/quiz` 경로 오류 정정, `billing/checkout` 문서-코드 불일치 정정)
+**버전**: v1.2 · **작성일**: 2026-08-13 · **최종 수정**: 2026-08-23(`billing/subscription/retry` — 구현된 적 없는 엔드포인트였음을 확인, 알림+마이페이지 배너 재사용 방식으로 정정)
+
+이전 수정(v1.1, 2026-08-22): 전 도메인 실제 라우트와 대조해 누락·불일치 정정 — `identity/refresh`, `content` 도메인 관리자 라우트 5개, `learning/tutor-history` 추가, `/api/learning/tutor`→`/api/tutor`·`/api/learning/quiz/submit`→`/api/learning/quiz` 경로 오류 정정, `billing/checkout` 문서-코드 불일치 정정
 **짝 파일**: `MakerStudio_Project_Design_v2.6.md` · `MakerStudio_MVP_Scope_v1.13.md`
 
 ## 0. 이 문서의 목적과 범위
@@ -55,7 +57,7 @@
 | POST | `/api/billing/checkout/verify` | ✓ (guardian) | `{paymentId, childId?, planId}` → 포트원 서버에서 실제 결제 정보를 다시 조회해 금액이 일치하는지 검증(클라이언트가 보낸 금액을 그대로 믿지 않음) 후 `activateSubscription()`/`activateFamilyGroup()`/`activateFamilySeatAddon()`으로 활성화. **웹훅(`webhook/portone`)이 최종 진실 공급원**이고 이 라우트는 결제 직후 화면을 빠르게 갱신하기 위한 보조 역할 — 둘 다 같은 활성화 함수를 호출해 멱등성 보장. **학생(role=student_child/student_teen) 토큰으로 호출 시 무조건 `403`**(§3.2 "학생 화면엔 결제 버튼 없음" 원칙을 서버에서도 강제) |
 | POST | `/api/billing/webhook/portone` | ✕ (포트원 서명 검증으로 대체) | PG사 웹훅 수신. 결제 성공/실패에 따라 구독 상태 갱신 + `notifications` 도메인에 이벤트 발행 |
 | POST | `/api/billing/subscription/cancel` | ✓ (guardian) | 즉시 해지 예약, 현재 결제주기 종료일까지는 유지(§4.3). **해지 후 30일 데이터 보관 정책 준비(2026-08-22, 0036)**: `data_retention_until`도 같이 기록(위 `family/cancel` 행 참고, 원칙 동일) |
-| POST | `/api/billing/subscription/retry` | ✓ (guardian) | 결제 실패 후 재시도 |
+| (서버 라우트 없음 — 알림+마이페이지 배너로 대체, 2026-08-23 정정) | 결제 실패 후 재시도 | — | **전용 API를 만들지 않기로 결정** — 이 프로젝트는 정기결제가 아니라 매번 브라우저가 여는 일회성 결제 구조라, 서버가 대신 재결제를 시도할 방법 자체가 없다(카드 정보 미저장). 즉시 실패(카드 거절 등)는 `app/checkout/page.tsx`가 에러를 보여주고 버튼을 다시 누를 수 있게 해서 이미 해결됨. 비동기 실패(웹훅으로만 도착하는 `Transaction.Failed`)는 `webhook/portone`이 정확한 `planId`/`childId`가 담긴 재시도 링크(`/checkout?plan=...&childId=...`)를 `notifications`(`payment_failed`/`payment_activation_failed`)로 보내고, `/mypage/billing`이 안 읽은 해당 알림을 배너로 띄워 그 링크로 안내한다(기존 `GET /api/notifications`·`PATCH /api/notifications/:id/read` 재사용, 새 스키마·API 없음). 예전엔 이 행에 존재하지 않는 `POST /api/billing/subscription/retry`가 적혀 있었음 — 실제로 구현된 적 없음 |
 | GET | `/api/billing/history` | ✓ (guardian 또는 admin, 2026-08-22) | 결제 내역/영수증 목록. `requireGuardianOrAdmin()` — admin은 자기 명의 결제(항상 0건)를 읽기만, 다른 사람 데이터가 보이는 게 아님 |
 | POST | `/api/billing/refund/calculate` | ✓ (guardian) | `{childId}`(개인) 또는 `{family:true}`(Family, 2026-08-20 추가) → 일할계산 또는 미사용 전액환불 예정액 반환 (§4.5, 계산식: `월구독료 × 잔여일수/전체주기일수`). Family는 7일 이내+가족 전원 미사용 시 전액환불. **회사 귀책(중복결제·시스템오류) 전액환불도 지원(2026-08-21)** — `payments.refund_reason`이 세팅된 결제 건이 있으면 기간·사용여부 무관 그 결제금액 전액환불(`reason: "company_fault"`). 세팅 자체는 여전히 CS/관리자가 SQL Editor로 수동 |
 | GET | `/api/billing/dashboard` | ✓ (admin) | **관리자 대시보드(2026-08-21)** — 이번달 매출/유료 구독자 수/이탈률/신규 결제 요약, 요금제별(premium/family) 고객수·비율·이탈률, 최근 6개월 매출 추이. `supabase/migrations/0033`의 뷰 3개를 service_role로만 조회(DB_Schema §2 참고, 뷰를 `authenticated`에 GRANT하면 RLS가 우회되는 위험이 있어 의도적으로 GRANT 없음) |

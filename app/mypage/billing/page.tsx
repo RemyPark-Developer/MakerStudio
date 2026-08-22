@@ -9,6 +9,9 @@ type Payment = { id: string; subscription_id: string; amount: number; status: st
 type Me = { role: string; childId: string | null; needsNickname: boolean };
 type FamilyChild = { childId: string; nickname: string };
 type FamilyGroup = { status: "active" | "canceled"; seatLimit: number; currentPeriodEnd: string } | null;
+type Notification = { id: string; type: string; message: string; action_url: string | null; read_at: string | null };
+
+const FAILED_PAYMENT_TYPES = new Set(["payment_failed", "payment_activation_failed"]);
 
 export default function BillingPage() {
   const [me, setMe] = useState<Me | null>(null);
@@ -19,6 +22,8 @@ export default function BillingPage() {
   const [forbidden, setForbidden] = useState(false);
   const [cancelMsg, setCancelMsg] = useState<string | null>(null);
   const [canceling, setCanceling] = useState(false);
+  const [failedPaymentNotification, setFailedPaymentNotification] = useState<Notification | null>(null);
+  const [dismissingNotification, setDismissingNotification] = useState(false);
 
   const [familyGroup, setFamilyGroup] = useState<FamilyGroup>(null);
   const [familyMembers, setFamilyMembers] = useState<FamilyChild[] | null>(null);
@@ -112,6 +117,20 @@ export default function BillingPage() {
             setPayments([]);
             setPaymentsError("결제 내역을 불러오지 못했어요.");
           });
+
+        // 결제 재시도(2026-08-23) — 서버가 대신 재결제할 방법이 없는 구조(포트원 브라우저
+        // 결제창을 매번 새로 여는 일회성 결제)라, 전용 API 대신 이미 쌓이고 있는
+        // payment_failed/payment_activation_failed 알림(action_url에 정확한 재시도 링크
+        // 포함)을 그대로 재사용해서 배너로 보여준다.
+        authedFetch("/api/notifications")
+          .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
+          .then((data: { notifications?: Notification[] }) => {
+            const failed = (data.notifications ?? []).find(
+              (n) => FAILED_PAYMENT_TYPES.has(n.type) && n.read_at === null
+            );
+            setFailedPaymentNotification(failed ?? null);
+          })
+          .catch(() => setFailedPaymentNotification(null));
       })
       .catch(() => setNeedsLogin(true));
 
@@ -199,6 +218,19 @@ export default function BillingPage() {
     );
   }
 
+  async function handleDismissFailedPayment() {
+    if (!failedPaymentNotification) return;
+    setDismissingNotification(true);
+    try {
+      await authedFetch(`/api/notifications/${failedPaymentNotification.id}/read`, { method: "PATCH" });
+      setFailedPaymentNotification(null);
+    } catch {
+      // 무시해도 됨 — 못 지워지면 새로고침 시 배너가 다시 뜨는 정도라 치명적이지 않음.
+    } finally {
+      setDismissingNotification(false);
+    }
+  }
+
   if (forbidden) {
     return (
       <main className="wrap">
@@ -212,6 +244,23 @@ export default function BillingPage() {
 
   return (
     <main className="wrap">
+      {failedPaymentNotification && (
+        <div className="card" style={{ borderColor: "var(--coral, #e05a4c)" }}>
+          <div className="tab coral">결제 실패</div>
+          <p style={{ margin: "6px 0 12px" }}>⚠️ {failedPaymentNotification.message}</p>
+          <div style={{ display: "flex", gap: 8 }}>
+            {failedPaymentNotification.action_url && (
+              <Link href={failedPaymentNotification.action_url} className="btn btnCoral">
+                다시 시도하기
+              </Link>
+            )}
+            <button onClick={handleDismissFailedPayment} disabled={dismissingNotification} className="btn btnOutline">
+              {dismissingNotification ? "처리 중..." : "확인했어요"}
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="card">
         <div className="tab">요금제</div>
         <h2>이용 가능한 요금제</h2>
