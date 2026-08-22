@@ -14,6 +14,7 @@ export default function BillingPage() {
   const [me, setMe] = useState<Me | null>(null);
   const [plans, setPlans] = useState<Plan[] | null>(null);
   const [payments, setPayments] = useState<Payment[] | null>(null);
+  const [paymentsError, setPaymentsError] = useState<string | null>(null);
   const [needsLogin, setNeedsLogin] = useState(false);
   const [forbidden, setForbidden] = useState(false);
   const [cancelMsg, setCancelMsg] = useState<string | null>(null);
@@ -101,9 +102,16 @@ export default function BillingPage() {
           return;
         }
         loadFamily();
-        return authedFetch("/api/billing/history")
+        // ⚠️ 이 fetch를 return하지 않는다 — 여기서 실패해도(예: 403) 위쪽 .catch()로
+        // 흘러가서 "로그인이 필요해요" 화면이 잘못 뜨면 안 된다(2026-08-22 버그 수정,
+        // 401 진짜 미로그인과 403 권한없음을 구분 못 하고 뭉뚱그리던 문제).
+        authedFetch("/api/billing/history")
           .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
-          .then((data) => setPayments(data.payments ?? []));
+          .then((data) => setPayments(data.payments ?? []))
+          .catch(() => {
+            setPayments([]);
+            setPaymentsError("결제 내역을 불러오지 못했어요.");
+          });
       })
       .catch(() => setNeedsLogin(true));
 
@@ -226,6 +234,8 @@ export default function BillingPage() {
         <h2>내 결제 내역</h2>
         {payments === null ? (
           <p className="muted">불러오는 중...</p>
+        ) : paymentsError ? (
+          <p className="muted">{paymentsError}</p>
         ) : payments.length === 0 ? (
           <p className="muted">결제 내역이 없어요.</p>
         ) : (

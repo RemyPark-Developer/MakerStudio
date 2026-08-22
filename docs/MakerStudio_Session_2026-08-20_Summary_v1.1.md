@@ -1,6 +1,6 @@
 # 2026-08-20 세션 요약 — 설계 판단과 구현 범위
 
-**버전**: v1.1 · **최종 수정**: 2026-08-20 · **짝 파일**: `MakerStudio_DB_Schema_v1.0.md`, `MakerStudio_MVP_Scope_v1.2.md`
+**버전**: v1.1 · **최종 수정**: 2026-08-20 · **짝 파일**: `MakerStudio_DB_Schema_v1.0.md`, `MakerStudio_MVP_Scope_v1.13.md`
 
 ### 개정 이력
 | 버전 | 날짜 | 주요 변경 |

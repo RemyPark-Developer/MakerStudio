@@ -1,11 +1,11 @@
 # MakerStudio API 명세서 (MVP 범위)
 
-**버전**: v1.0 · **작성일**: 2026-08-13
-**짝 파일**: `MakerStudio_Project_Design_v2.4.md` · `MakerStudio_MVP_Scope_v1.2.md`
+**버전**: v1.1 · **작성일**: 2026-08-13 · **최종 수정**: 2026-08-22(전 도메인 실제 라우트와 대조해 누락·불일치 정정 — `identity/refresh`, `content` 도메인 관리자 라우트 5개, `learning/tutor-history` 추가, `/api/learning/tutor`→`/api/tutor`·`/api/learning/quiz/submit`→`/api/learning/quiz` 경로 오류 정정, `billing/checkout` 문서-코드 불일치 정정)
+**짝 파일**: `MakerStudio_Project_Design_v2.6.md` · `MakerStudio_MVP_Scope_v1.13.md`
 
 ## 0. 이 문서의 목적과 범위
 
-`MakerStudio_MVP_Scope_v1.2.md`에서 확정된 **Must·Should·Could 항목만** 엔드포인트로 정의합니다. Won't 항목(교사 대시보드, 학급코드, 코스 다중모듈, 평점·리뷰 등)의 API는 이 문서에 포함하지 않습니다 — Phase 4 이후 별도 문서로 추가합니다.
+`MakerStudio_MVP_Scope_v1.13.md`에서 확정된 **Must·Should·Could 항목만** 엔드포인트로 정의합니다. Won't 항목(교사 대시보드, 학급코드, 코스 다중모듈, 평점·리뷰 등)의 API는 이 문서에 포함하지 않습니다 — Phase 4 이후 별도 문서로 추가합니다.
 
 ## 1. 공통 규칙
 
@@ -32,8 +32,9 @@
 | (없음 — 브라우저가 직접 처리) | 소셜 로그인/가입 (Google, 2026-08-22 구현) | — | ~~`POST /api/identity/signup/social`~~는 실제로 만들지 않음 — 브라우저가 `supabase.auth.signInWithOAuth()`로 직접 Google과 통신하고(`lib/supabase/browser.ts`), `/auth/callback` 페이지가 그 결과 세션을 `GET/PATCH /api/identity/me`(바로 아래)로 브리징한다. 카카오는 Supabase가 토큰 방식(`signInWithIdToken`)을 지원하지 않아 리다이렉트 방식으로 통일 — 대표님이 Supabase 대시보드에 Kakao 프로바이더를 등록하면 같은 구조 그대로 확장 가능. `Auth_Flow.md` §2.1/2.2 참고 |
 | POST | `/api/identity/password/forgot` | ✕ | `{email}` → 재설정 메일 발송 (항상 200 반환 — 가입 여부를 노출하지 않기 위함) |
 | POST | `/api/identity/password/reset` | ✕ | `{resetToken, newPassword}` → 변경 완료 |
-| GET | `/api/identity/me` | ✓ | 내 프로필 조회 |
-| PATCH | `/api/identity/me` | ✓ | `{nickname?, avatar?}` — 닉네임·아바타만 수정 가능(§10 프로필수정) |
+| GET | `/api/identity/me` | ✓ | 내 프로필 조회. `role='guardian'`이면 연결된 자녀 `childId`도 같이 반환(현재 스코프: guardian 1명=자녀 1명, §10). 닉네임이 비어 있으면(신규 소셜/온보딩 미완료) `{needsNickname:true}`만 반환 |
+| PATCH | `/api/identity/me` | ✓ | `{nickname?, avatar?, phone?, role?}` — `role`은 신규 사용자(닉네임 미설정)일 때만 반영(§3.3, 기존 계정의 role은 이 경로로 변경 불가). `phone`은 guardian의 SMS 알림 수신 번호(`/mypage/settings`, 2026-08-20 추가) |
+| POST | `/api/identity/refresh` | ✕ | `{refreshToken}` → 액세스 토큰 재발급(기본 1시간 만료 대응, 2026-08-13 추가— 원래 이 문서에 없었음) |
 | POST | `/api/identity/logout` | ✓ | 세션 무효화 |
 | DELETE | `/api/identity/me` | ✓ (guardian만, 자녀 계정 삭제 시) | §4.5 흐름 시작 — 아래 `billing/refund/calculate` 먼저 호출 후 이 엔드포인트로 최종 확정 |
 
@@ -46,15 +47,16 @@
 | Method | Path | 인증 | 설명 |
 |---|---|---|---|
 | GET | `/api/billing/plans` | ✕ | 요금제 목록 (Free, Premium 개인, Family 최대 3명 — B2B는 Won't) |
-| GET | `/api/billing/family/members` | ✓ (guardian) | 내 family_group 상태 + 현재 멤버 + `guardian_child_links` 기준 추가 가능한 자녀 목록 |
+| GET | `/api/billing/family/members` | ✓ (guardian 또는 admin, 2026-08-22) | 내 family_group 상태 + 현재 멤버 + `guardian_child_links` 기준 추가 가능한 자녀 목록. `requireGuardianOrAdmin()` — admin은 읽기만(`/mypage/billing` 지원·테스트 목적) |
 | POST | `/api/billing/family/members` | ✓ (guardian) | `{childId}` → family_group에 추가. 서버가 `guardian_child_links`로 법적 관계를 먼저 검증(`lib/billing/familyMembership.ts`) |
 | DELETE | `/api/billing/family/members/:childId` | ✓ (guardian) | family_group 멤버십만 제거 (`guardian_child_links`는 유지) |
 | POST | `/api/billing/family/cancel` | ✓ (guardian) | Family 해지. `subscription/cancel`과 동일 원칙 — 즉시 끊지 않고 결제주기 종료일까지 유지(§4.3, 2026-08-20 추가). **해지 후 30일 데이터 보관 정책 준비(2026-08-22, 0036)**: `data_retention_until`(결제주기 종료일+30일)도 같이 기록 — 실제 파기는 자동 실행 안 됨(`scripts/purge-expired-data.ts` 수동 실행 전까지 없음), 문구는 초안·법률 검토 필요 |
-| POST | `/api/billing/checkout` | ✓ (guardian) | `{planId, paymentMethod}` → 포트원 결제창 세션 생성. `planId`는 `premium`\|`premium_vip`(월 ₩100,000, 2026-08-22 추가)\|`family`\|`family_extra_seat`(좌석 추가, ₩4,900/좌석, 2026-08-20 추가, 그 결제주기만 유효). **학생(role=student_child) 토큰으로 호출 시 무조건 `403`** (§3.2 "학생 화면엔 결제 버튼 없음" 원칙을 서버에서도 강제). 실제로는 `app/checkout/page.tsx`가 브라우저에서 직접 포트원 SDK를 호출하는 구조라, 서버 라우트는 `app/api/billing/checkout/verify`(결제 검증)만 존재 — 이 표의 경로명은 실제 구현과 다르다(기존부터 있던 문서-코드 불일치, 이번 작업 범위 밖) |
+| (서버 라우트 없음 — 브라우저가 직접 결제창을 연다) | 결제 시작 | — | **이 프로젝트는 서버가 결제 세션을 만드는 구조가 아니다** — `app/checkout/page.tsx`가 브라우저에서 `@portone/browser-sdk`의 `PortOne.requestPayment()`를 직접 호출해 결제창을 연다(다른 PG 연동과 헷갈리지 말 것). `planId`는 `premium`\|`premium_vip`(월 ₩100,000, 2026-08-22 추가)\|`family`\|`family_extra_seat`(좌석 추가, ₩4,900/좌석, 2026-08-20 추가, 그 결제주기만 유효). 결제 후 아래 `checkout/verify`만 서버가 처리한다(2026-08-22 문서-코드 불일치 정정 — 예전엔 `POST /api/billing/checkout`이라는 존재하지 않는 서버 엔드포인트가 적혀 있었음) |
+| POST | `/api/billing/checkout/verify` | ✓ (guardian) | `{paymentId, childId?, planId}` → 포트원 서버에서 실제 결제 정보를 다시 조회해 금액이 일치하는지 검증(클라이언트가 보낸 금액을 그대로 믿지 않음) 후 `activateSubscription()`/`activateFamilyGroup()`/`activateFamilySeatAddon()`으로 활성화. **웹훅(`webhook/portone`)이 최종 진실 공급원**이고 이 라우트는 결제 직후 화면을 빠르게 갱신하기 위한 보조 역할 — 둘 다 같은 활성화 함수를 호출해 멱등성 보장. **학생(role=student_child/student_teen) 토큰으로 호출 시 무조건 `403`**(§3.2 "학생 화면엔 결제 버튼 없음" 원칙을 서버에서도 강제) |
 | POST | `/api/billing/webhook/portone` | ✕ (포트원 서명 검증으로 대체) | PG사 웹훅 수신. 결제 성공/실패에 따라 구독 상태 갱신 + `notifications` 도메인에 이벤트 발행 |
 | POST | `/api/billing/subscription/cancel` | ✓ (guardian) | 즉시 해지 예약, 현재 결제주기 종료일까지는 유지(§4.3). **해지 후 30일 데이터 보관 정책 준비(2026-08-22, 0036)**: `data_retention_until`도 같이 기록(위 `family/cancel` 행 참고, 원칙 동일) |
 | POST | `/api/billing/subscription/retry` | ✓ (guardian) | 결제 실패 후 재시도 |
-| GET | `/api/billing/history` | ✓ (guardian) | 결제 내역/영수증 목록 |
+| GET | `/api/billing/history` | ✓ (guardian 또는 admin, 2026-08-22) | 결제 내역/영수증 목록. `requireGuardianOrAdmin()` — admin은 자기 명의 결제(항상 0건)를 읽기만, 다른 사람 데이터가 보이는 게 아님 |
 | POST | `/api/billing/refund/calculate` | ✓ (guardian) | `{childId}`(개인) 또는 `{family:true}`(Family, 2026-08-20 추가) → 일할계산 또는 미사용 전액환불 예정액 반환 (§4.5, 계산식: `월구독료 × 잔여일수/전체주기일수`). Family는 7일 이내+가족 전원 미사용 시 전액환불. **회사 귀책(중복결제·시스템오류) 전액환불도 지원(2026-08-21)** — `payments.refund_reason`이 세팅된 결제 건이 있으면 기간·사용여부 무관 그 결제금액 전액환불(`reason: "company_fault"`). 세팅 자체는 여전히 CS/관리자가 SQL Editor로 수동 |
 | GET | `/api/billing/dashboard` | ✓ (admin) | **관리자 대시보드(2026-08-21)** — 이번달 매출/유료 구독자 수/이탈률/신규 결제 요약, 요금제별(premium/family) 고객수·비율·이탈률, 최근 6개월 매출 추이. `supabase/migrations/0033`의 뷰 3개를 service_role로만 조회(DB_Schema §2 참고, 뷰를 `authenticated`에 GRANT하면 RLS가 우회되는 위험이 있어 의도적으로 GRANT 없음) |
 
@@ -70,10 +72,16 @@
 
 **⚠️ 이 도메인이 §7.2 위반이 가장 쉽게 발생하는 지점입니다.** `getStaticProps`/SSG로 이 엔드포인트를 대체하지 말 것 — 반드시 요청마다 서버에서 권한을 확인하는 동적 응답이어야 합니다.
 
-**참고**: `app/admin/content-review` 화면이 쓰는 나머지 관리자 전용 엔드포인트(`/api/content/generate`,
-`/api/content/pending`, `/api/content/:id`, `/api/content/:id/review`, `/api/content/:id/review-chat`)는
-이 문서에 원래부터 기록된 적이 없었다(2026-08-21 확인, §6.3 파이프라인이 이 문서 최초 작성일
-이후에 만들어졌기 때문) — 이번 변경 범위 밖이라 손대지 않음.
+**`app/admin/content-review` 화면(§6.3 AI 콘텐츠 파이프라인, 2026-08-22 문서에 처음 채움 — 원래 기록된 적 없었음)**:
+
+| Method | Path | 인증 | 설명 |
+|---|---|---|---|
+| POST | `/api/content/generate` | ✓ (admin) | `{topic, board?}` → AI 초안 생성 → 스키마 검증 → 실제 avr-gcc 컴파일 검증까지 자동 재시도(최대 3회, §6.3 "2단계 자동 검증"). 셋 다 통과하면 `content_modules`에 `pending_review`로 저장, 실패가 반복되면 `automation_stuck` |
+| GET | `/api/content/pending` | ✓ (admin) | `content_modules` 목록. `?status=pending\|published\|withdrawn\|all`(기본 `pending` — `pending_review`+`automation_stuck`) |
+| GET | `/api/content/:id` | ✓ (admin) | `content_modules` 단일 조회(기술적 PK `:id` 기준) + 코드 syntax highlight(`codeHtml`, shiki) |
+| POST | `/api/content/:id/review` | ✓ (admin) | `{action: 'approve'\|'reject', note?, isPremium?}` → 승인 시 `published`+`is_premium` 확정(§6.3-a), 반려 시 `withdrawn`. 이미 `pending_review`/`automation_stuck`이 아니면 `409` |
+| GET | `/api/content/:id/review-chat` | ✓ (admin) | 검수 중 AI와 나눈 대화(`content_review_messages`) 조회 |
+| POST | `/api/content/:id/review-chat` | ✓ (admin) | 검수 중 AI에게 질문 → `lib/rate-limit-db.ts`의 `checkReviewChatUsage()`로 사용량 제한 |
 
 ---
 
@@ -81,14 +89,15 @@
 
 | Method | Path | 인증 | 설명 |
 |---|---|---|---|
-| GET | `/api/learning/progress` | ✓ | 내 진도 목록 (마이페이지) |
+| GET | `/api/learning/progress` | ✓ | 내 진도 목록 (마이페이지, `progress` 테이블 — 정적 `examples` JSON 콘텐츠 전용, 아래 `learning/quiz`가 쓰는 `learning_progress`와는 다른 테이블) |
 | POST | `/api/learning/progress` | ✓ | `{exampleId, step}` → 진도 갱신 |
-| POST | `/api/learning/tutor` | ✓ | `{question, exampleId, stepName}` — 기존 `app/api/tutor/route.ts` 그대로 재사용(이미 구현·검증됨, §5.2). rate-limit도 기존 `lib/rate-limit.ts` 재사용, user_id 기반으로 전환만 하면 됨 |
+| POST | `/api/tutor` | ✓ (로그인 필수, 2026-08-13 결정) | `{question, exampleId, stepName}` — **경로 정정(2026-08-22)**: `/api/learning/tutor`가 아니라 `/api/tutor`가 실제 경로(도메인 접두사 예외, 원래부터 `learning` 하위로 옮긴 적 없음). `lib/rate-limit-db.ts`(DB 기반, user_id 기준, 하루 10회) 사용. `student_child`의 욕설/개인정보 입력은 `lib/learning/tutorSafety.ts`가 Anthropic 호출 전에 차단(2026-08-20) |
 | GET | `/api/learning/code` | ✓ | 저장한 코드 목록 (마이페이지) |
 | POST | `/api/learning/code` | ✓ | `{exampleId, code}` → 저장 (컴파일 검증 통과 후에만 허용 — 클라이언트 검증과 별개로 서버도 최소 문법 체크 권장) |
-| GET | `/api/learning/wishlist` | ✓ | **Could 항목** — 찜한 키트 목록. 협상 결과 제외되면 이 엔드포인트 전체 제거하고 클라이언트 로컬 상태로 대체 |
-| POST/DELETE | `/api/learning/wishlist/:kitId` | ✓ | 찜 추가/제거 (Could) |
-| POST | `/api/learning/quiz/submit` | ✓ | `{exampleId, answer}` → 정답 여부 반환 |
+| GET | `/api/learning/wishlist` | ✓ | **Could 항목, 미구현** — 찜한 키트 목록. 실제로 만들어지지 않았고 협상 결과 제외되면 이 행 자체를 지운다 |
+| POST/DELETE | `/api/learning/wishlist/:kitId` | ✓ | 찜 추가/제거 (Could, 미구현) |
+| POST | `/api/learning/quiz` | ✓ | `{moduleId, score, passed, answers?}` → **경로 정정(2026-08-22)**: `/api/learning/quiz/submit`이 아니라 `/api/learning/quiz`가 실제 경로. `content_modules` 기반 콘텐츠 전용 — `submit_quiz_attempt` RPC(0008/0009)가 `quiz_attempts`에 시도 기록 + `learning_progress`를 원자적으로 갱신(DB_Schema.md §4 참고) |
+| GET | `/api/learning/tutor-history` | ✓ | AI 튜터 대화 기록(`tutor_messages`, `/mypage/history`). `?childId=`로 guardian이 연결된 자녀 기록 열람(`guardian_child_links` 검증) — 원래 이 문서에 없었음(2026-08-22 추가) |
 
 **Premium VIP 멘토링(2026-08-22, 0035)** — "AI 초안 + admin 승인 후 발송" 구조. AI가
 사람인 척 단독으로 응답을 보내는 것은 절대 금지(표시광고법 허위광고 리스크 + 정직성 원칙).
@@ -124,12 +133,16 @@ MVP 범위(§ MVP문서 3항목표: "관리자 검수 — Should, 비-UI 가능"
 
 **실제 연결된 트리거**: 결제 성공(`payment_success`), 결제 활성화 실패(`payment_activation_failed`),
 결제 실패(`payment_failed`, `webhook/portone`의 `Transaction.Failed` 처리), 구독 해지
-(`subscription_canceled`), Family 멤버 추가/제거(`family_member_added`/`family_member_removed`).
-전부 guardian에게만 간다(아동 계정은 수신자가 되지 않음). 채널은 지금 전부 email — guardian
-연락처(휴대폰)가 DB에 없어서 SMS는 보류(DB_Schema.md §5 참고).
+(`subscription_canceled`), Family 멤버/좌석 변경(`family_member_added`/`family_member_removed`/
+`family_seat_added`/`family_seat_reduced`), AI 튜터 아동 안전장치 발동(`child_chat_flagged`,
+2026-08-20), VIP 피드백 발송(`vip_feedback_sent`, 2026-08-22). 전부 guardian에게만 간다(아동
+계정은 수신자가 되지 않음). **채널(2026-08-22 정정)**: `payment_failed`/`child_chat_flagged`
+2종만 email+SMS, 나머지는 email만(`profiles.phone`, 0018 — guardian이 `/mypage/settings`에서
+직접 입력해야 SMS를 받음. Solapi는 프로덕션 키 미설정이라 dev bypass 상태).
 
-**아직 없음**: 구독 만료 임박 알림(cron 인프라 필요), 콘텐츠 검수 알림(실질적 수신자 없음), 알림
-on/off 설정 API, 인앱 알림함 UI 페이지.
+**아직 없음**: 구독 만료 임박 알림(cron 인프라 필요), 콘텐츠 검수 승인/반려 알림(제출자가 항상
+admin이라 실질적 수신자 없음), 알림 on/off 설정 API. **인앱 알림함 UI(`/mypage/notifications`)는
+있음** — 위 목록에서 빠져 있던 기존 오류 정정(2026-08-22).
 
 ---
 
@@ -137,7 +150,7 @@ on/off 설정 API, 인앱 알림함 UI 페이지.
 
 | Method | Path | 인증 | 설명 |
 |---|---|---|---|
-| POST | `/api/commerce/cart/add` | ✓ | §4-B 딥링크 스펙 그대로 구현. `{sku, qty, ref}` → 쇼핑몰 장바구니 URL 반환. 실패 시 `{fallbackUrl}`만 반환(§4-A 방식 B 폴백) |
+| POST | `/api/commerce/cart/add` | ✓ | **미구현(2026-08-22 확인)** — §4-B 딥링크 스펙만 정의돼 있고 `app/api/commerce/`는 저장소에 없음. `{sku, qty, ref}` → 쇼핑몰 장바구니 URL 반환. 실패 시 `{fallbackUrl}`만 반환(§4-A 방식 B 폴백) |
 
 ---
 

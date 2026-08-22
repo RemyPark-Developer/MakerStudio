@@ -55,3 +55,19 @@ export async function getAuthedUser(req: NextRequest): Promise<AuthedUser | null
 export function requireGuardian(user: AuthedUser | null): user is AuthedUser {
   return user !== null && user.role === "guardian";
 }
+
+/**
+ * 결제 관련 "조회 전용" 라우트에서만 쓰는 가드 — guardian은 원래 자기 데이터를 보는 것,
+ * admin은 지원/테스트 목적으로 읽기만 허용한다(2026-08-22, `/mypage/billing` 버그 수정 —
+ * 프론트엔드는 admin을 이미 통과시키고 있었는데 서버가 guardian만 허용해서 403이 401로
+ * 오인되어 "로그인이 필요해요" 화면이 잘못 뜨던 문제).
+ *
+ * ⚠️ 결제를 실제로 만들거나 바꾸는 엔드포인트(checkout/verify, subscription/cancel,
+ * family/cancel, family/members POST/DELETE, refund/calculate 등)에는 절대 쓰지 말 것 —
+ * 그런 라우트는 `guardian_id: user.id`/`owner_id: user.id`로 "내 것"을 만들거나 바꾸는데,
+ * admin에게 허용하면 admin 명의로 의미 없는 구독/가족그룹이 생기거나 무의미한 취소/환불이
+ * 일어난다. 반드시 `requireGuardian()`만 쓸 것.
+ */
+export function requireGuardianOrAdmin(user: AuthedUser | null): user is AuthedUser {
+  return user !== null && (user.role === "guardian" || user.role === "admin");
+}

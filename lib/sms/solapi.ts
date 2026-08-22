@@ -2,7 +2,7 @@ import { SolapiMessageService } from "solapi";
 
 /**
  * 실제 문자 발송 (Solapi 연동).
- * 짝 문서: docs/MakerStudio_Auth_Flow_v1.0.md §2.3
+ * 짝 문서: docs/MakerStudio_Auth_Flow_v1.2.md §2.3
  *
  * ⚠️ 이전 버전은 콘솔 로그만 찍고 "보냈다"고 화면에 알려주는 거짓 성공이었음
  * (2026-08-13 발견·수정). 지금은 설정이 안 되어 있으면 명확히 에러를 던져서,

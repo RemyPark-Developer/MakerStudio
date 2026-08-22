@@ -2,8 +2,8 @@
 
 Claude Code가 이 저장소에서 작업할 때 항상 먼저 읽어야 하는 파일입니다. 상세 설계는 아래 문서를 참고하세요 (이 파일에 중복 작성하지 않음 — 문서가 둘로 갈라지면 둘 다 낡습니다):
 
-- `docs/MakerStudio_Project_Design_v2.4.md` — 전체 설계 배경("왜")
-- `docs/MakerStudio_MVP_Scope_v1.2.md` — 지금 뭘 만들어야 하는지(Must/Should/Could/Won't)
+- `docs/MakerStudio_Project_Design_v2.6.md` — 전체 설계 배경("왜")
+- `docs/MakerStudio_MVP_Scope_v1.13.md` — 지금 뭘 만들어야 하는지(Must/Should/Could/Won't)
 - `docs/MakerStudio_API_Spec_v1.0.md`, `DB_Schema`, `Auth_Flow`, `NonFunctional_Requirements` — 기술 명세
 - `docs/MakerStudio_Dev_Sequence_v1.0.md` — 지금 순서상 뭘 먼저 짜야 하는지
 
@@ -16,12 +16,29 @@ Claude Code가 이 저장소에서 작업할 때 항상 먼저 읽어야 하는 
 
 이 4가지는 스코프 협상이나 일정 단축의 대상이 아닙니다. 급하다고 이 부분을 건너뛰지 마세요.
 
+## 아키텍처 원칙 (2026-08-22 확정 — 새 코드 작성 시 반드시 따를 것)
+
+이 프로젝트는 **"점진적, 선택적 모듈화"** 전략을 따릅니다 — 전체를 한 번에 완벽한 플러그형
+아키텍처로 만들지 않고, 재사용 가치가 높고 위험이 낮은 부분부터 순서대로 인터페이스 뒤로
+감춥니다. 상세 표(우선순위/대상/이유)와 배경은 `docs/Architecture_Principles_v1.0.md` 참고.
+
+- **1순위(즉시)**: 결제(PortOne)/SMS(Solapi)/이메일(Resend)를 `PaymentProvider`/`SmsProvider`/
+  `EmailProvider` 인터페이스로 추상화. 지금 구현체는 그 인터페이스의 구현체 중 하나로 재배치.
+- **2순위(점진적)**: 각 도메인의 DB 접근을 Repository 계층으로 분리 — 새 기능을 만들 때마다
+  해당 도메인부터 이 패턴으로 전환한다(보이스카웃 룰, 일괄 강제 리팩터링은 하지 않음).
+- **3순위(신중히, 나중에)**: 인증(`ms_access_token` 패턴)은 지금 모든 도메인이 의존하는
+  핵심이라, 실제 두 번째 프로젝트가 생겨 요구사항이 확인된 후에만 `AuthAdapter` 인터페이스로
+  추출한다. **지금은 건드리지 않는다.**
+- **대상 아님**: 한국 규제 로직(전자상거래법 다크패턴 금지 등)은 재사용 대상이 아니라 이
+  시장에서 지켜야 할 필수 제약이므로 항상 그대로 유지한다 — 인터페이스 뒤로 감추지 않는다.
+
 ## 코드를 짤 때 항상 지키는 것
 
 - **콘텐츠 검증**: `content/examples/`에 파일을 추가/수정하면 `npm run validate-content`와 `npm run validate-arduino`를 반드시 통과해야 함. CI가 자동으로 막지만, 로컬에서 먼저 돌려볼 것.
 - **테스트**: 결제·인증 관련 로직은 단위 테스트 없이 커밋하지 않는다 (`lib/rate-limit.test.ts` 참고 패턴).
-- **도메인 분리**: 새 API 라우트는 `app/api/{domain}/...` 형태로, `identity`/`billing`/`content`/`learning`/`notifications`/`commerce`/`moderation` 중 하나에 속하게 만든다. 도메인끼리는 직접 DB를 건드리지 않고 함수 호출/이벤트로 통신한다(`Design.md` §5.5) — 이 저장소엔 실제 이벤트 버스가 없어서 "이벤트"는 지금까지 전부 순수 함수 호출로 구현됨(`notifyGuardian()` 등). **`moderation` 도메인(관리자 콘텐츠 검수)과 "AI 튜터 아동 안전장치"(`lib/learning/tutorSafety.ts`)는 이름이 비슷해 보여도 완전히 다른 기능이니 헷갈리지 말 것** — 후자는 `learning` 도메인 하위.
+- **도메인 분리**: 새 API 라우트는 `app/api/{domain}/...` 형태로, `identity`/`billing`/`content`/`learning`/`notifications`/`commerce`/`moderation` 중 하나에 속하게 만든다. 도메인끼리는 직접 DB를 건드리지 않고 함수 호출/이벤트로 통신한다(`Design.md` §5.5) — 이 저장소엔 실제 이벤트 버스가 없어서 "이벤트"는 지금까지 전부 순수 함수 호출로 구현됨(`notifyGuardian()` 등). **(단, 이건 도메인 *간* 통신 얘기이고, 도메인 *안*에서는 아직 각 API 라우트가 `getSupabaseServerClient()`로 Supabase 테이블에 직접 접근한다 — Repository 계층으로의 전환은 아직 시작 전이며 진행 중인 게 아니다. `Architecture_Principles_v1.0.md` 2순위, 새 기능을 만들 때마다 해당 도메인부터 점진적으로 전환할 것.)** **`moderation` 도메인(관리자 콘텐츠 검수)과 "AI 튜터 아동 안전장치"(`lib/learning/tutorSafety.ts`)는 이름이 비슷해 보여도 완전히 다른 기능이니 헷갈리지 말 것** — 후자는 `learning` 도메인 하위.
 - **버전 관리**: 위 `docs/` 문서 중 하나라도 이 저장소의 결정과 달라지면, 코드보다 문서를 먼저 고치고 커밋 메시지에 사유를 남긴다. 문서가 낡으면 다음 세션(다른 AI든 사람이든)이 잘못된 전제로 작업하게 된다.
+- **세션 시작 시 확인 순서(2026-08-22 추가)**: 작업을 시작하기 전에 `docs/Architecture_Principles_v1.0.md`와 `CHANGELOG.md`의 최신 항목(맨 위)을 먼저 읽는다. 새로 만들거나 고칠 기능이 기존 도메인(`identity`/`billing`/`content`/`learning`/`moderation`/`commerce`/`notifications`) 중 하나에 영향을 주면, 그 도메인과 관련된 문서(`DB_Schema`/`API_Spec` 등)의 **관련 섹션만** 같이 확인한다 — 문서 전체를 매번 다시 읽으라는 뜻이 아니라, 지금 건드리는 도메인의 최신 상태를 문서와 대조하고 시작하라는 뜻.
 - **환경 변수**: `.env.local`에만 시크릿 저장, 커밋 금지. 새 시크릿이 필요하면 `.env.local.example`에 키 이름만 추가.
 
 ## 지금까지 실제로 구현된 것 (재구현하지 말고 재사용)
@@ -54,8 +71,9 @@ Claude Code가 이 저장소에서 작업할 때 항상 먼저 읽어야 하는 
 - `lib/api-error-handler.ts` (`withErrorHandling`) — **모든 API 라우트는 이걸로 감싸야 함.** 안 감싸면 예상 못 한 예외가 HTML 에러 페이지로 나가서 클라이언트에 "서버에 연결할 수 없어요" 같은 오해를 주는 메시지가 뜬다(2026-08-13 실사용자 테스트 중 발견). **새 라우트를 만들 때 이 패턴을 반드시 따를 것.**
 - **해지 후 30일 데이터 보관 정책 — 준비 단계만(2026-08-22, `0036`)** — `subscriptions`/`family_groups.data_retention_until`(해지 시 `current_period_end`+30일로 계산, `canceled_at` 아님 — §4.3 원칙과 일관), `scripts/purge-expired-data.ts`(관리자 수동 실행, 기본 dry-run, `--confirm`으로 실제 삭제, `hasPremiumAccess()`로 다른 경로 접근권 재확인하는 안전장치 포함). **실제 자동 파기(cron)는 연결 안 됨 — 지금은 아무것도 자동으로 안 지워짐.** ⚠️ **이 정책의 법적 고지 문구(`docs/MakerStudio_Privacy_Policy_DRAFT_addendum_v0.1.md`, 가입 동의 화면·해지 확인 문구)는 전부 초안이며 실제 법률 검토가 안 됐음 — 확정된 정책으로 취급하지 말 것.** "학습 데이터" 범위는 `lib/billing/dataRetention.ts`의 `LEARNING_DATA_TABLES`(6개 테이블, Family 환불 정책의 "이용 내역" 정의 재사용)가 유일한 소스.
 - **Premium VIP 요금제(월 ₩100,000, 2026-08-22, `0035`)** — `subscriptions.plan`에 `premium_vip` 추가, `vip_mentor_requests` 테이블. "AI 초안 + admin 승인 후 발송" 구조 — `app/api/learning/vip/admin/[id]/approve-and-send`를 거치지 않고는 `final_feedback`이 절대 채워지지 않는다(AI 단독 응답 절대 금지, 표시광고법 허위광고 리스크 + 정직성 원칙). `app/api/learning/vip/submit`(학생 제출, 월 4회 한도, `lib/learning/tutorSafety.ts` 안전필터 재사용), `app/admin/vip-review`(관리자 검수, `content-review`와 동일 패턴), `app/mypage/vip`(학생 본인 + guardian 열람), `app/mypage/billing`에 자녀별 VIP 카드. **`lib/content/gate.ts`의 `hasPremiumAccess()`가 `premium_vip`도 인정하도록 확장됨** — VIP 구독자는 일반 Premium 콘텐츠도 함께 이용 가능(새 게이팅 로직 짤 때 이 포함 관계 기억할 것). `hasVipAccess()`는 Family 경유 없음(개인 구독 전용).
-- **소셜 로그인 — 구글(2026-08-22)** — `lib/supabase/browser.ts`(브라우저 전용 anon-key 클라이언트, `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY` 신규 사용), `app/SocialLoginButtons.tsx`, `app/auth/callback/page.tsx`. `POST /api/identity/signup/social` 같은 커스텀 서버 엔드포인트는 안 만듦 — 브라우저가 `supabase.auth.signInWithOAuth()`로 Supabase와 직접 통신하고, 콜백 페이지가 그 세션의 토큰을 기존 `ms_access_token`/`ms_refresh_token`(localStorage) 체계로 그대로 옮겨서 `authedFetch` 등 기존 인프라를 그대로 재사용한다. 온보딩(신규 사용자 닉네임 입력)도 새 서버 로직 없이 기존 `GET/PATCH /api/identity/me`(`needsNickname` 판단)를 그대로 재사용. role은 무조건 `student_teen`(§3.3, 소셜 로그인은 만 14세 이상으로 간주). **카카오는 아직 버튼이 없음** — Supabase는 카카오에 토큰 방식(`signInWithIdToken`)을 지원하지 않아 구글과 동일한 리다이렉트 방식으로 통일해야 하는데, 대표님이 Supabase 대시보드에 Kakao 프로바이더(Client ID/Secret)를 등록해야 버튼을 추가할 수 있다(코드 구조는 이미 준비됨, `SocialLoginButtons`에 한 줄만 추가). 상세: `docs/MakerStudio_Auth_Flow_v1.0.md` §2.1/2.2.
+- **소셜 로그인 — 구글(2026-08-22)** — `lib/supabase/browser.ts`(브라우저 전용 anon-key 클라이언트, `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY` 신규 사용), `app/SocialLoginButtons.tsx`, `app/auth/callback/page.tsx`. `POST /api/identity/signup/social` 같은 커스텀 서버 엔드포인트는 안 만듦 — 브라우저가 `supabase.auth.signInWithOAuth()`로 Supabase와 직접 통신하고, 콜백 페이지가 그 세션의 토큰을 기존 `ms_access_token`/`ms_refresh_token`(localStorage) 체계로 그대로 옮겨서 `authedFetch` 등 기존 인프라를 그대로 재사용한다. 온보딩(신규 사용자 닉네임 입력)도 새 서버 로직 없이 기존 `GET/PATCH /api/identity/me`(`needsNickname` 판단)를 그대로 재사용. role은 무조건 `student_teen`(§3.3, 소셜 로그인은 만 14세 이상으로 간주). **카카오는 아직 버튼이 없음** — Supabase는 카카오에 토큰 방식(`signInWithIdToken`)을 지원하지 않아 구글과 동일한 리다이렉트 방식으로 통일해야 하는데, 대표님이 Supabase 대시보드에 Kakao 프로바이더(Client ID/Secret)를 등록해야 버튼을 추가할 수 있다(코드 구조는 이미 준비됨, `SocialLoginButtons`에 한 줄만 추가). 상세: `docs/MakerStudio_Auth_Flow_v1.2.md` §2.1/2.2.
 - **이메일 가입 버그 수정(2026-08-22)** — `app/signup/page.tsx`의 `TeenSignupForm`(중고등/성인 이메일 가입)이 아동 SMS 인증 전용 엔드포인트(`/api/identity/signup/child/verify`)를 잘못 호출하고 있어서 이메일 가입이 항상 실패하던 버그를 위 소셜 로그인 작업 중 발견해 같이 고침 — 올바른 엔드포인트(`/api/identity/signup`)로 정정. 실DB로 재검증 완료.
+- **admin이 결제 화면에서 막히던 버그 2건 수정(2026-08-22)** — 대표님이 admin 계정으로 실사용 테스트 중 발견. (1) `Premium 구독하기` 버튼이 `childId`가 없으면(admin·자녀 미연결 guardian·학생 전부 해당) 이유 설명 없이 무조건 `/mypage`로 조용히 튕기던 문제 — `app/examples/[id]/page.tsx`가 role별로 정확한 안내(로그인 유도/자녀 연결 안내/"관리자는 구독 불가"/"보호자 계정에서만 가능")를 보여주도록 수정. (2) `/mypage/billing`이 프론트엔드는 admin을 통과시키면서 `GET /api/billing/history`·`GET /api/billing/family/members`는 서버에서 `requireGuardian()`(guardian만)으로 막고 있어서 403이 발생했는데, 프론트엔드가 401/403을 구분 안 하고 전부 "로그인이 필요해요" 화면으로 뭉뚱그려서 **로그인된 admin에게 로그인하라는 화면이 뜨던 버그**. `lib/supabase/auth-context.ts`에 `requireGuardianOrAdmin()`(읽기 전용 라우트에만 쓸 것 — 결제를 만들거나 바꾸는 라우트는 절대 이걸 쓰면 안 됨, 함수 주석 참고) 신설해서 `billing/history`·`billing/family/members`(GET만) 2곳에 적용, `/mypage/billing`도 401만 로그인 화면으로 보내고 나머지 실패는 별도 에러 메시지로 분리. 실DB+Playwright로 admin/guardian(자녀有/無)/student_teen 4개 역할 조합 10개 체크 전부 검증.
 
 ## 아직 결정 안 된 것
 

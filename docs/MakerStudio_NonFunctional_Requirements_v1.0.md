@@ -1,7 +1,7 @@
 # MakerStudio 비기능 요구사항 (MVP 범위)
 
-**버전**: v1.0 · **작성일**: 2026-08-13
-**짝 파일**: `MakerStudio_Project_Design_v2.4.md` · `MakerStudio_MVP_Scope_v1.2.md`
+**버전**: v1.1 · **작성일**: 2026-08-13 · **최종 수정**: 2026-08-22(§3·§9 실제 구현 상태 대조 — 미성년자 결제 차단·rate-limit 구현 확인, E2E 자동화 스위트 미존재 확인)
+**짝 파일**: `MakerStudio_Project_Design_v2.6.md` · `MakerStudio_MVP_Scope_v1.13.md`
 
 ## 0. 이 문서의 목적
 
@@ -45,8 +45,8 @@
 |---|---|---|
 | 전송 구간 암호화 | 전체 페이지 HTTPS 강제 (HSTS 헤더 포함) | 신규 — 업계 표준 |
 | 비밀키 관리 | `.env.local`에만 저장, 저장소에 커밋 금지 | 기존 `.env.local.example` 패턴 확장 |
-| AI 튜터 사용량 제한 | 무료 하루 10회 (user_id 기준, §2 DB의 `tutor_usage` 테이블) | §5.2 rate-limit.ts |
-| 미성년자 결제 차단 | API 미들웨어 + RLS 이중 방어 | 인증/인가 플로우 문서 §3 |
+| AI 튜터 사용량 제한 | 무료 하루 10회 (user_id 기준, §2 DB의 `tutor_usage` 테이블) — **달성**(`lib/rate-limit-db.ts`, IP 기준이던 `lib/rate-limit.ts`에서 전환 완료) | §5.2 |
+| 미성년자 결제 차단 | API 미들웨어 + RLS 이중 방어 — **달성**(`requireGuardian()` 미들웨어 + `0022_rls_billing_notifications.sql`, 2026-08-21 실 JWT로 이중 방어 둘 다 실증 검증 완료) | 인증/인가 플로우 문서 §3 |
 | 의존성 취약점 점검 | `npm audit` 또는 Dependabot을 CI에 포함, high 이상 취약점은 배포 차단 | §9.1 확장 |
 | 아동 동의 감사 로그 | 보호자 SMS 인증 성공/실패 기록 보관 | 인증 플로우 문서 §2.3 |
 | AI 튜터 아동 안전장치 | `student_child` 입력의 욕설/개인정보(휴대폰번호·주민등록번호)를 Anthropic 호출 전에 차단, 응답에도 PII 재스캔, 보호자에게 즉시 알림(email+SMS) | `lib/learning/tutorSafety.ts`, 2026-08-20 추가 |
@@ -114,8 +114,8 @@
 |---|---|
 | 결제·인증 관련 로직 | 단위 테스트 필수 (커버리지 목표 80% 이상) |
 | 콘텐츠 검증 | `validate-content`, `validate-arduino` CI 게이트 필수 통과(이미 구현됨, §6.3) |
-| E2E 테스트 | 최소 3개 핵심 시나리오: 회원가입→결제, AI튜터 질문, 계정삭제→환불계산 |
-| CI 필수 통과 | PR마다 테스트 실패 시 병합 차단(§9.1, 이미 GitHub Actions로 구현됨) |
+| E2E 테스트 | 최소 3개 핵심 시나리오: 회원가입→결제, AI튜터 질문, 계정삭제→환불계산. **⚠️ 2026-08-22 확인**: 커밋된 자동화 스위트(예: Playwright 테스트 파일, CI 연결)는 저장소에 없음 — 그동안 기능별로 Playwright를 임시 스크립트로 만들어 실DB로 검증한 뒤 스크립트를 지우는 방식으로 대체해왔음(각 세션 요약 문서의 "검증 방법" 참고). **매 기능마다 수동 재현이라 회귀 방지 효과가 없음** — CI에 상시 연결된 E2E 스위트가 필요해지면 별도 작업 |
+| CI 필수 통과 | PR마다 테스트 실패 시 병합 차단(§9.1, 이미 GitHub Actions로 구현됨 — `validate-content`/`validate-arduino`/`npm test`(단위테스트)/`npm run build`(타입체크·빌드) 전부 CI 게이트에 포함돼 있음, `.github/workflows/ci.yml` 2026-08-22 재확인) |
 
 ---
 

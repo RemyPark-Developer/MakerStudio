@@ -1,7 +1,7 @@
 # MakerStudio DB 스키마 (MVP 범위)
 
-**버전**: v1.0 · **작성일**: 2026-08-13
-**짝 파일**: `MakerStudio_Project_Design_v2.4.md` · `MakerStudio_MVP_Scope_v1.2.md` · `MakerStudio_API_Spec_v1.0.md`
+**버전**: v1.1 · **작성일**: 2026-08-13 · **최종 수정**: 2026-08-22(36개 마이그레이션 전체와 대조해 누락 테이블 3개 추가 — `content_generation_log`, `content_review_messages`, `learning_progress`/`quiz_attempts`, §7의 "RLS 미정의" 오기 정정)
+**짝 파일**: `MakerStudio_Project_Design_v2.6.md` · `MakerStudio_MVP_Scope_v1.13.md` · `MakerStudio_API_Spec_v1.0.md`
 
 ## 0. 이 문서의 목적과 범위
 
@@ -260,9 +260,65 @@ select 허용, 0030에서 `is_premium=false` 조건 추가) + 테이블 단위 G
 없거나 비로그인이면 최신 버전. 카탈로그(`getPublishedModules()`)는 항상 슬러그당 최신 버전만
 노출.
 
+### `content_generation_log` (`0010_content_modules.sql`, 이 문서에 원래 기록된 적 없었음 — 2026-08-22 추가)
+
+`POST /api/content/generate`(§6.3 "2단계 자동 검증")가 재시도할 때마다 남기는 시도 로그.
+`content_modules` 하나가 자동재생성 루프를 왜/몇 번 돌았는지 추적하는 용도.
+
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| id | uuid, PK | |
+| module_id | text, FK → content_modules.id, on delete cascade | |
+| attempt_number | integer | |
+| stage | text | `ai_generate` \| `schema_validate` \| `compile_validate` |
+| passed | boolean | |
+| detail | text, nullable | 실패 사유 등 |
+| created_at | timestamptz | |
+
+**RLS/GRANT 없음** — `content_modules_public_read_published`와 달리 이 테이블은 검수 로그라
+service_role(admin API)만 접근, 클라이언트 노출 의도 자체가 없음(`waitlist_emails`/`tutor_usage`와
+동일 패턴, CLAUDE.md의 실DB 전수 확인 항목 참고).
+
+### `content_review_messages` (`0013_content_review_chat.sql`, 이 문서에 원래 기록된 적 없었음 — 2026-08-22 추가)
+
+관리자가 검수 화면(`app/admin/content-review`)에서 AI와 나누는 대화 기록.
+`GET/POST /api/content/:id/review-chat`.
+
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| id | uuid, PK | |
+| module_id | text, FK 없음 | `draft` 단계(아직 `content_modules`에 없는 상태)에서도 리뷰가 가능해야 해서 `tutor_messages`와 같은 이유로 느슨하게 참조만 함 |
+| admin_id | uuid, FK → auth.users, on delete cascade | |
+| role | text | `admin` \| `assistant` |
+| content | text | |
+| created_at | timestamptz | |
+
+**RLS**: `content_review_messages_admin_only` — `profiles.role='admin'`만 select(0013). GRANT는
+`0025_grant_remaining_rls_tables.sql`이 보완(위 §RLS 항목 경고 패턴 그대로).
+
 ---
 
 ## 4. `learning` 도메인
+
+### `learning_progress` / `quiz_attempts` (`0008_learning_progress.sql`, 이 문서에 원래 기록된 적 없었음 — 2026-08-22 추가)
+
+**바로 아래 `progress`/`saved_codes`와는 별개의, 병렬로 존재하는 진도 시스템이다** —
+`progress`/`saved_codes`는 정적 `content/examples/*.json` 콘텐츠(§3 `examples` 테이블) 전용이고,
+`learning_progress`/`quiz_attempts`는 `content_modules`(AI 생성 콘텐츠, §3) 전용이다. `module_id`가
+`content_modules.slug`를 텍스트로만 참조(FK 없음 — draft 단계 콘텐츠도 진도를 남길 수 있어야
+해서 느슨하게 참조). `POST /api/learning/quiz`가 호출하는 `submit_quiz_attempt(p_module_id,
+p_score, p_passed, p_answers, p_pass_threshold=70)` RPC가 두 테이블에 원자적으로 기록한다(퀴즈
+시도를 `quiz_attempts`에 append, `learning_progress`를 `on conflict(user_id, module_id)`로
+upsert) — `increment_tutor_usage`(0002)와 같은 "동시 요청 경쟁조건 방지" 패턴.
+
+| 테이블 | 컬럼 | 설명 |
+|---|---|---|
+| `learning_progress` | id, user_id(FK→auth.users), module_id(text), board, status(`in_progress`\|`completed`), quiz_passed, quiz_score, quiz_attempts_count, started_at, completed_at, updated_at, UNIQUE(user_id, module_id) | §6.3-a 버전 판정 로직(위 `content_modules` 섹션 참고)이 `started_at`을 "이 사용자가 이 슬러그를 언제부터 학습했는가"의 기준으로 씀 |
+| `quiz_attempts` | id, user_id(FK→auth.users), module_id(text), score, passed, answers(jsonb), attempted_at | append-only 시도 로그. 한 번 제출할 때마다 한 행씩 쌓임(`learning_progress`는 최신 상태만 유지) |
+
+**RLS**: 둘 다 본인 select/insert만(`auth.uid() = user_id`). update는 `learning_progress`만
+허용(정책은 있지만 실제로는 RPC가 `security definer`로 우회해서 씀). GRANT는
+`0025_grant_remaining_rls_tables.sql`로 보완.
 
 ### `progress`
 | 컬럼 | 타입 | 설명 |
@@ -419,15 +475,34 @@ submitter가 항상 admin이라 실질적 수신자 없음), 알림 on/off 설�
 auth.users (Supabase 관리) ──1:1── profiles
 profiles ──1:N(guardian)── guardian_child_links ──N:1(child)── profiles
 profiles(guardian) ──1:N── subscriptions ──1:N── payments
+profiles(guardian) ──1:1── family_groups ──1:N── family_group_members ──N:1(child)── profiles
+                                                          │
+                                                     payments(family_group_id)
 profiles ──1:N── progress ──N:1── examples
 profiles ──1:N── saved_codes ──N:1── examples
-profiles ──1:N── wishlist_items (Could)
+profiles ──1:N── learning_progress ──N:1(module_id)── content_modules
+profiles ──1:N── quiz_attempts ──N:1(module_id)── content_modules
+content_modules ──1:N── content_generation_log
+content_modules ──1:N── content_review_messages
+profiles ──1:N── wishlist_items (Could, 미구현)
 profiles ──1:N── tutor_usage
+profiles ──1:N── tutor_messages
 profiles ──1:N── notifications
+profiles ──1:N── vip_mentor_requests
 ```
+
+**2026-08-22 갱신**: `family_groups`/`content_modules`/`learning_progress`/`quiz_attempts`/
+`content_generation_log`/`content_review_messages`/`tutor_messages`/`vip_mentor_requests`가
+이 다이어그램에 원래 빠져 있었음 — 각 섹션(§2~§4)엔 이미 상세히 있었는데 요약도에만
+반영이 안 됐던 것. `waitlist_emails`는 어떤 사용자 테이블과도 FK 관계가 없어(비로그인
+방문자용) 이 다이어그램에서 제외.
 
 ## 7. 이 문서에서 아직 정의하지 않은 것
 
-- 인덱스 설계 (쿼리 패턴이 확정된 후 결정 — 예: `examples.status`, `progress.user_id` 등에 필요할 가능성 높음)
-- Row Level Security(RLS) 정책 — Supabase 사용 시 필수. `profiles.role`별로 어떤 행을 읽고 쓸 수 있는지 규칙 필요(특히 `student_child`가 `billing` 테이블에 접근 못 하도록 하는 규칙이 §3.2 원칙의 DB 레벨 강제)
-- `moderation` 도메인 테이블 — MVP는 비-UI라 Supabase 대시보드에서 `examples.status`를 직접 수정하는 것으로 충분, 별도 테이블 불필요
+- 인덱스 설계 — 마이그레이션마다 그때그때 필요한 인덱스를 추가해왔음(예: `idx_subscriptions_guardian`, `idx_learning_progress_user` 등, 각 테이블 섹션 참고). 쿼리 패턴이 늘어나면 추가로 필요할 수 있음
+- `moderation` 도메인 테이블 — MVP는 비-UI라 Supabase 대시보드에서 `content_modules.status`를 직접 수정하는 것으로 충분, 별도 테이블 불필요
+
+**⚠️ 2026-08-22 정정**: 이 섹션이 예전엔 "RLS 정책이 아직 없다"고 적어뒀었는데, 실제로는
+`0022`~`0029`(2026-08-21)로 이 문서의 거의 모든 테이블에 RLS+GRANT가 이미 구현·실증
+검증까지 끝나 있었다 — 문서가 낡은 채로 방치돼 있었던 것. 각 테이블 섹션의 "RLS" 서술과
+CLAUDE.md의 RLS 관련 절대 규칙(새 테이블엔 정책+GRANT를 항상 세트로)이 최신 소스다.

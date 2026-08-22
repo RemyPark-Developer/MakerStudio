@@ -1,6 +1,6 @@
 # 2026-08-21 세션 요약 — 설계 판단과 구현 범위
 
-**버전**: v1.11 · **최종 수정**: 2026-08-21 · **짝 파일**: `MakerStudio_Auth_Flow_v1.0.md`, `MakerStudio_Session_2026-08-20_Summary_v1.1.md`
+**버전**: v1.11 · **최종 수정**: 2026-08-21 · **짝 파일**: `MakerStudio_Auth_Flow_v1.2.md`, `MakerStudio_Session_2026-08-20_Summary_v1.1.md`
 
 ### 개정 이력
 | 버전 | 날짜 | 주요 변경 |
@@ -47,7 +47,7 @@
 
 ### 배경
 
-`docs/MakerStudio_Auth_Flow_v1.0.md` §3은 `billing/*`가 "API 미들웨어 + RLS(Row Level
+`docs/MakerStudio_Auth_Flow_v1.2.md` §3은 `billing/*`가 "API 미들웨어 + RLS(Row Level
 Security) 이중 방어"로 막혀 있다고 명시하지만, 2026-08-20 점검(→
 [[project-rls-gap-billing-tables]])에서 실제로는 `payments`/`subscriptions`/`notifications`/
 `family_groups`/`family_group_members` 전부 RLS가 없고 API 레이어(`requireGuardian` 등)만

@@ -2,6 +2,271 @@
 
 이 파일은 `makerstudio-web-scaffold_vX.X.zip`의 버전과 함께 관리됩니다. 문서(design doc 등)와 마찬가지로, 코드를 전달할 때마다 버전을 올리고 여기에 한 줄씩 남깁니다.
 
+**⚠️ 2026-08-22 정정**: v2.9(2026-08-14) 이후 8일간 갱신이 끊겨 있었음 — 그 사이 Family 요금제,
+RLS, VIP 요금제, 데이터 보관 정책, 소셜 로그인 등 큰 기능들이 전부 기록 안 된 채로 쌓여 있던 걸
+발견해서 실제 커밋 이력(`git log`)을 기준으로 v2.10~v2.32를 한 번에 채움. 각 항목의 더 상세한
+설계 판단/검증 방법은 `docs/MakerStudio_Session_2026-08-2{0,1,2}_Summary_*.md`에 있음 — 여기선
+간략하게만 기록.
+
+## v2.34 — 2026-08-22
+
+**요약**: admin 계정이 결제 관련 화면에서 막히던 버그 2건 수정 — 대표님이 admin 계정으로
+실사용 테스트하다 발견(`Premium 구독하기` → `/mypage`로 조용히 튕김, `/mypage/billing`에서
+로그인돼 있는데 "로그인이 필요해요" 화면이 뜸).
+
+- 신규: `lib/supabase/auth-context.ts`의 `requireGuardianOrAdmin()` — 결제 "조회 전용" 라우트
+  에서만 쓰는 가드(쓰기/액션 라우트에는 절대 쓰면 안 됨, 함수 주석에 경고 명시)
+- 변경: `app/api/billing/history`, `app/api/billing/family/members`(GET만)가
+  `requireGuardian()` 대신 `requireGuardianOrAdmin()`을 쓰도록 — 프론트엔드는 이미 admin을
+  통과시키고 있었는데 서버만 guardian으로 막고 있던 불일치를 해소
+- 변경: `app/examples/[id]/page.tsx` — `childId` 없을 때 무조건 `/mypage`로 보내던 걸 role별
+  안내(비로그인/자녀 미연결 guardian/admin/학생)로 세분화
+- 변경: `app/mypage/billing/page.tsx` — 결제내역 조회 실패(403 등)가 401(진짜 미로그인)과
+  뭉뚱그려져 "로그인이 필요해요" 화면으로 잘못 넘어가던 걸 분리, 결제내역 섹션에 별도 에러
+  메시지 추가
+- 검증: 실DB+Playwright로 admin/guardian(자녀有)/guardian(자녀無)/student_teen 4개 역할
+  조합 10개 체크 전부 통과
+
+## v2.33 — 2026-08-22
+
+**요약**: "점진적, 선택적 모듈화" 아키텍처 원칙 확정 — 전체를 한 번에 완벽한 플러그형
+구조로 만들지 않고, 재사용 가치가 높고 위험이 낮은 부분부터 순서대로 인터페이스 뒤로 감춘다.
+
+- 신규: `docs/Architecture_Principles_v1.0.md` — 우선순위 표(1순위 결제/SMS/이메일 프로바이더
+  추상화 → 2순위 도메인별 Repository 계층 → 3순위 인증 어댑터는 실제 두 번째 프로젝트가
+  생기기 전까지 보류, 한국 규제 로직은 항상 그대로 유지)
+- 변경: `Project_Design_v2.6.md`(v2.5→v2.6, git mv) §5.6 신설 — §5.5(이벤트 버스 완전분리
+  구조)가 장기 목표이고 지금은 이 우선순위를 따른다는 점을 §5.5 본문에도 명시
+- 변경: `CLAUDE.md`에 새 `## 아키텍처 원칙` 섹션 + 세션 시작 시 `Architecture_Principles_v1.0.md`/
+  `CHANGELOG.md` 최신 항목을 먼저 확인하라는 규칙 추가. 기존 "도메인 분리" 문구 옆에 "DB 접근은
+  아직 각 라우트가 Supabase 클라이언트를 직접 쓰고 있고 Repository 전환은 시작 전"이라는 현재
+  상태를 괄호로 명시(과장된 인상 방지)
+
+## v2.32 — 2026-08-22
+
+**요약**: API_Spec/DB_Schema/Dev_Sequence/NonFunctional_Requirements 4개 문서가 "작성일
+2026-08-13" 버전 그대로 8일 넘게 방치돼 있던 것(내용은 계속 갱신됐는데 버전 번호만 안 올라감)과,
+Auth_Flow/MVP_Scope/Project_Design 3개는 내부 버전과 파일명이 서로 어긋나 있던 것을 발견해 정리.
+
+- 변경: 위 4개 문서를 실제 마이그레이션 36개·API 라우트 40개와 전부 대조해 누락·오류 정정(예:
+  `/api/learning/tutor`가 실제로는 `/api/tutor`, `POST /api/billing/checkout`은 존재하지 않는
+  엔드포인트였음, `content_generation_log`/`content_review_messages`/`learning_progress`/
+  `quiz_attempts` 4개 테이블이 DB_Schema에 아예 없었음 등), 각 문서 버전을 v1.1로 올림
+- 변경: `git mv`로 파일명을 내부 버전에 맞게 정정 — `Auth_Flow_v1.0.md`→`v1.2`,
+  `MVP_Scope_v1.2.md`→`v1.13`, `Project_Design_v2.4.md`→`v2.5`. 참조하던 다른 문서·코드 주석
+  (`lib/identity/childSignup.ts`, `lib/sms/solapi.ts` 등)도 전부 같이 갱신
+- 변경: 이 CHANGELOG — v2.9 이후 8일치 누락분(v2.10~v2.31) 보충
+
+## v2.31 — 2026-08-22
+
+**요약**: 소셜 로그인(구글) 최초 연동 + 조사 중 발견한 이메일 가입 버그 수정 (커밋 `75fb546`).
+
+- 신규: `lib/supabase/browser.ts` — 브라우저 전용 anon-key Supabase 클라이언트(서버의
+  service_role 싱글턴과 별개)
+- 신규: `app/SocialLoginButtons.tsx`, `app/auth/callback/page.tsx` — `signInWithOAuth` 리다이렉트
+  방식(카카오도 같은 구조로 확장 가능하게 설계, 토큰 방식은 카카오 미지원이라 채택 안 함).
+  콜백 페이지가 Supabase 세션을 기존 `ms_access_token`/`ms_refresh_token` 체계로 브리징해서
+  `authedFetch` 등 기존 인증 인프라를 그대로 재사용
+- 수정: `app/signup/page.tsx`의 `TeenSignupForm`이 아동 SMS 인증 전용 엔드포인트를 잘못 호출해
+  이메일 가입이 항상 실패하던 버그(원래 `/api/identity/signup`을 써야 했음)
+- 검증: 실 Supabase 세션으로 신규/기존 사용자 온보딩 분기, 세션 브리징, 이메일 가입 전 구간을
+  Playwright로 실증
+
+## v2.30 — 2026-08-22
+
+**요약**: 해지 후 30일 데이터 보관 정책 — 준비 단계만(`0036`, 커밋 `e69aca8`). 실제 자동 파기(cron)는
+범위 밖, 법적 고지 문구는 전부 초안(법률 검토 필요).
+
+- 신규: `subscriptions`/`family_groups.data_retention_until`(해지 시 `current_period_end`+30일로
+  계산 — `canceled_at` 아님, §4.3 원칙과 일관), `lib/billing/dataRetention.ts`
+- 신규: `scripts/purge-expired-data.ts` — 관리자 수동 실행 전용, 기본 dry-run,
+  `hasPremiumAccess()`로 다른 경로 접근권 재확인하는 안전장치
+- 신규: `docs/MakerStudio_Privacy_Policy_DRAFT_addendum_v0.1.md` — 이 조항 하나만 다루는 초안
+- 검증: 해지→보관기한 계산, 재구독→초기화, 파기 스크립트 3가지 케이스 전부 실DB로 실증
+
+## v2.29 — 2026-08-22
+
+**요약**: Premium VIP 요금제(월 ₩100,000) 신설 — "AI 초안 + admin 승인 후 발송" 비동기 멘토링
+(`0035`, 커밋 `d20ec37`). AI가 단독으로 응답을 보내는 건 절대 금지.
+
+- 신규: `subscriptions.plan`에 `premium_vip` 추가, `vip_mentor_requests` 테이블
+- 신규: `app/api/learning/vip/{submit,my-requests,admin/*}`, `app/admin/vip-review`,
+  `app/mypage/vip`, `/mypage/billing`의 자녀별 VIP 카드
+- 변경: `lib/content/gate.ts`의 `hasPremiumAccess()`가 `premium_vip`도 인정하도록 확장(VIP는
+  일반 Premium의 상위 호환)
+- 검증: 제출→PII차단→월4회한도→AI초안→관리자승인+발송→학생/보호자 열람까지 22개 체크 실증
+
+## v2.28 — 2026-08-22
+
+**요약**: 가격 정책 페이지(`/pricing`) 신설(`0034`, 커밋 `6c8864d`) — 다크패턴 금지 원칙 적용.
+
+- 신규: `app/pricing/page.tsx` — Premium 메인/Family 보조 노출, 가짜 정가·사전체크 없음
+- 신규: `waitlist_emails` 테이블 + `POST /api/notifications/waitlist` — 출시 알림 신청,
+  `marketing_consent` 기본 미체크(정보통신망법 제50조)
+
+## v2.27 — 2026-08-21
+
+**요약**: `content_modules.is_premium` 추가 + 관리자 검수 화면에서 유료 여부 설정(`0030`,
+커밋 `5807660`) — RGB LED 색상 제어 강의를 실제로 유료 판매하기 위함.
+
+- 변경: `lib/content/publishedModules.ts`의 하드코딩된 `isPremium: false`를 `row.is_premium`으로
+- 신규: `app/admin/content-review/[id]/page.tsx`에 "유료 콘텐츠로 설정" 체크박스(승인 시점에만 반영)
+- **컬럼 추가와 RLS 정책 수정(`is_premium=false`만 anon에 노출)을 한 마이그레이션에 같이 묶음** —
+  컬럼만 먼저 추가하면 그 사이 우회 노출 창이 열리기 때문
+
+## v2.26 — 2026-08-21
+
+**요약**: 회사 귀책(중복결제·시스템오류) 전액환불 자동 판별(`0031`, 커밋 `f2c70f4`).
+
+- 신규: `payments.refund_reason`(`duplicate_payment`\|`system_error`\|null)
+- 변경: `refund/calculate`가 이 값이 세팅된 결제 건은 기간·사용여부 무관 전액환불하도록 확장
+  (개인/Family 공통). 세팅 자체는 여전히 CS/관리자가 SQL Editor로 수동
+
+## v2.25 — 2026-08-21
+
+**요약**: §6.3-a 콘텐츠 버전 고정 정책 — "개선판 만들기" 기능(`0032`, 커밋 `5390c3d`).
+
+- 신규: `content_modules.slug`(버전과 무관한 안정 식별자), `UNIQUE(slug, version)`
+- 신규: `POST /api/content/:id/revise` — 게시된 콘텐츠를 복제해 다음 버전을 검수 대기로 생성
+- 신규: `getPublishedModuleForUser()` — 이미 학습 중인 사용자는 진도 시작 시점 버전으로 고정,
+  신규 학습자는 최신 버전
+
+## v2.24 — 2026-08-21
+
+**요약**: 관리자 대시보드(매출·요금제별 고객수/이탈률) 신설(`0033`, 커밋 `3ed549e`).
+
+- 신규: `admin_monthly_revenue`/`admin_plan_customers`/`admin_plan_churn` 뷰 3개(service_role
+  전용 — `authenticated` GRANT 주면 RLS 우회되는 위험이 있어 의도적으로 GRANT 없음)
+- 신규: `GET /api/billing/dashboard`, `app/admin/dashboard`
+- 검증: 임시 계정+구독 조합으로 수기 계산한 기대값과 실제 뷰 응답 일치 확인
+
+## v2.23 — 2026-08-21
+
+**요약**: `payments`/`subscriptions`/`notifications` RLS 실제 구현(`0022`~`0029`, 커밋
+`8c9d32f`~`3cbd5cd`, 5개 커밋 묶음) — `Auth_Flow.md` §3이 약속하던 "API 미들웨어 + RLS
+이중 방어"가 실제론 RLS 없이 API 레이어만 있었던 걸 채움.
+
+- 신규: guardian은 본인 것만 select, admin은 전체 select, student_child/teen은 항상 0건 +
+  insert 하드 차단
+- **발견한 구조적 문제**: 이 프로젝트는 `anon`/`authenticated`에 대한 기본 GRANT 자체가 없어서
+  RLS 정책만 만들면 owner조차 42501로 막힘 — `family_groups`/`family_group_members`/
+  `learning_progress`/`quiz_attempts`/`tutor_messages`/`content_review_messages`/
+  `content_modules`까지 같은 문제로 순차 발견·보완
+- 발견: `profiles`/`progress`/`saved_codes`에 이 저장소 마이그레이션 어디에도 없던 RLS 정책이
+  이미 실DB에 있었던 것(Supabase 대시보드 마법사로 생성된 것으로 추정)을 발견해 이력에 백필,
+  `guardian_child_links`는 RLS는 켜져 있는데 정책이 하나도 없어 한 번도 정상 동작한 적 없었던
+  것도 발견해 수정
+- 신규: `public.debug_list_policies()` RPC — PostgREST가 `pg_policies`를 REST로 노출하지 않아
+  RLS 정책 존재 여부를 직접 조회할 방법이 없던 것을 보완(service_role 전용, 영구 보관용 진단 도구)
+
+## v2.22 — 2026-08-20
+
+**요약**: Family 좌석 추가(4번째부터, ₩4,900/좌석)와 Family 해지 API 추가, `gate.ts` 접근 판단
+버그 수정(`0021`, 커밋 `62c1199`).
+
+- 신규: `POST /api/billing/family/cancel`, `lib/billing/activateFamilySeatAddon.ts`
+- **버그 수정**: `hasPremiumAccess()`/`hasFamilyPlanAccess()`가 `status==='active'`까지 요구해서
+  해지 즉시(잔여기간 무시) 접근이 끊기던 문제 — §4.3 "해지해도 잔여기간까지 이용 가능" 원칙 위반이었음
+
+## v2.21 — 2026-08-20
+
+**요약**: Family 좌석초과 동시성 방어(`0020`, 커밋 `7093977`).
+
+- 신규: `add_family_member(p_family_group_id, p_child_id)` RPC — `family_groups` row를
+  `for update`로 잠가 동시 추가 요청을 직렬화, 정원 판단을 원자적으로 재확인
+
+## v2.20 — 2026-08-20
+
+**요약**: 죽은 컬럼 `profiles.guardian_id` 제거(`0019`, 커밋 `cab326f`) — `guardian_child_links`
+테이블로 완전히 대체된 뒤 안 쓰이던 컬럼 정리.
+
+## v2.19 — 2026-08-20
+
+**요약**: notifications 도메인에 SMS 채널 추가(`0018`, 커밋 `e517ae8`).
+
+- 신규: `profiles.phone`(guardian이 `/mypage/settings`에서 직접 입력)
+- 변경: `payment_failed`/`child_chat_flagged` 2종만 email+SMS, 나머지는 email만(Solapi는
+  프로덕션 키 미설정, dev bypass로 로직만 완성)
+
+## v2.18 — 2026-08-20
+
+**요약**: AI 튜터 아동 안전장치 추가(`0017`, 커밋 `d97a641`) — 실사용자 없어 후순위였지만 서비스
+오픈 전 최소 안전장치는 필요하다는 판단.
+
+- 신규: `student_child`의 욕설/개인정보(휴대폰번호·주민등록번호) 입력을 Anthropic 호출 전에 차단
+  (`lib/learning/tutorSafety.ts`), 차단 시 하루 10회 quota 안 깎임, 응답에도 PII 재스캔
+- 변경: `tutor_messages`에 `flagged`/`flag_reason` 컬럼, 차단 시 원문 대신 치환된 텍스트 저장
+- 신규: 연결된 보호자에게 `notifyGuardian()`으로 즉시 알림
+
+## v2.17 — 2026-08-20
+
+**요약**: notifications 도메인 실제 연결(`0016`, 커밋 `d0980ba`) — 테이블은 `0001_init.sql`부터
+있었지만 실제로 insert하는 코드가 없어 계속 비어있었음.
+
+- 신규: `lib/notifications/notify.ts`의 `notifyGuardian()` — billing/family 도메인 이벤트(결제
+  성공/실패, 구독·Family 해지, Family 멤버 추가/제거)를 email(Resend)로 발송
+- 신규: `GET /api/notifications`, `PATCH /api/notifications/:id/read`
+
+## v2.16 — 2026-08-20
+
+**요약**: Family 결제내역을 `payments`에 통합(`0015`, 커밋 `01af218`).
+
+- 변경: `payments.family_group_id`(nullable) 추가, `subscription_id`와 배타적 제약(정확히 하나만)
+- 변경: `/api/billing/history` → `/mypage/billing`이 Family 결제도 함께 조회하도록 확장
+
+## v2.15 — 2026-08-20
+
+**요약**: Family 요금제(₩19,900/월, 최대 3명) 구독 그룹 구조 신설(`0014`, 커밋 `d7e783e`) —
+Won't→Should로 승격된 첫 구현.
+
+- 신규: `family_groups`/`family_group_members` 테이블(보호자당 1개, `owner_id` unique라 결제
+  검증·웹훅 중복 처리에도 자연히 멱등적)
+- **`guardian_child_links`와는 별개 개념**임을 명시 — 아이를 family_group에 추가하려면 서버가
+  먼저 `guardian_child_links`로 법적 관계를 확인해야 함(`checkCanAddFamilyMember`)
+
+## v2.14 — 2026-08-20
+
+**요약**: 관리자 콘텐츠 검수 화면(목록/상세/AI 채팅/승인·반려) 신설(`0013`, 커밋 `2dca5d3`).
+
+- 신규: `app/admin/content-review`, `content_review_messages` 테이블(검수 중 AI와 나눈 대화,
+  admin만 select)
+- 신규: `GET /api/content/pending`, `GET/POST /api/content/:id`, `POST /api/content/:id/review`,
+  `GET/POST /api/content/:id/review-chat`
+
+## v2.13 — 2026-08-19
+
+**요약**: AI 튜터 대화 기록 저장(`0012`, 커밋 `33b088f`) — `/mypage/history` 화면의 기반.
+
+- 신규: `tutor_messages` 테이블(본인만 select), `app/api/tutor/route.ts`가 매 대화를 기록하도록 변경
+
+## v2.12 — 2026-08-19
+
+**요약**: 로그인 사용자 닉네임 표시 + AI 콘텐츠 자동 생성 파이프라인(§6.3) 최초 구현(`0010`~`0011`,
+커밋 `7210c39`).
+
+- 신규: `content_modules`/`content_generation_log` 테이블, `POST /api/content/generate` —
+  AI 초안→스키마 검증→실제 avr-gcc 컴파일 검증까지 자동 재시도(최대 3회)
+- 변경: `app/NavAuthButtons.tsx` — 로그인 상태면 닉네임 표시
+
+## v2.11 — 2026-08-19
+
+**요약**: `learning` 도메인 퀴즈 제출 API 추가(`0008`~`0009`, 커밋 `0180129`).
+
+- 신규: `learning_progress`/`quiz_attempts` 테이블, `submit_quiz_attempt` RPC(퀴즈 시도 기록+진도
+  갱신을 한 트랜잭션으로 원자 처리) — 정적 `examples` 콘텐츠 전용이던 기존 `progress` 테이블과는
+  별개로, `content_modules`(AI 생성 콘텐츠) 전용 진도 시스템
+- 신규: `POST /api/learning/quiz`
+
+## v2.10 — 2026-08-18
+
+**요약**: 로그인 무한루프, `guardian_child_links` 연결, `childId` 매핑 버그 수정(`0007`,
+커밋 `2b16a05`).
+
+- 신규: `profiles.guardian_id`(나중에 `0019`에서 죽은 컬럼으로 판명돼 제거됨 — 당시엔 필요하다고
+  판단했던 임시 컬럼)
+- 수정: 초등학생 SMS 인증 완료 시 로그인된 guardian과 실제로 `guardian_child_links`가 연결되도록,
+  `identity/me` 응답의 `childId` 매핑 버그 수정
+
 ## v2.9 — 2026-08-14
 
 **요약**: 실제 포트원 테스트 결제 중 발견된 두 번째 필수 필드 누락 — "이니시스 V2 일반 결제의 경우 구매자 휴대폰 번호는 필수 입력입니다."

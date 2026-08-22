@@ -1,6 +1,6 @@
 /**
  * 초등학생 개인가입(보호자 SMS 인증) 핵심 로직.
- * 짝 문서: docs/MakerStudio_Auth_Flow_v1.0.md §2.3
+ * 짝 문서: docs/MakerStudio_Auth_Flow_v1.2.md §2.3
  *
  * ⚠️ 이 파일이 CLAUDE.md의 "절대 원칙 4번"(서버가 반드시 재검증)의 실제 구현입니다.
  * 외부 I/O(실제 SMS 발송, Supabase 호출)와 분리해뒀습니다 — 그래야

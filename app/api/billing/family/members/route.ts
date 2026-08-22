@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAuthedUser, requireGuardian } from "@/lib/supabase/auth-context";
+import { getAuthedUser, requireGuardian, requireGuardianOrAdmin } from "@/lib/supabase/auth-context";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { withErrorHandling } from "@/lib/api-error-handler";
 import { checkCanAddFamilyMember } from "@/lib/billing/familyMembership";
@@ -20,7 +20,7 @@ const ADD_MEMBER_ERROR_MESSAGES: Record<string, string> = {
 
 export const GET = withErrorHandling(async (req: NextRequest) => {
   const user = await getAuthedUser(req);
-  if (!requireGuardian(user)) {
+  if (!requireGuardianOrAdmin(user)) {
     return NextResponse.json({ error: "forbidden", message: "보호자만 이용할 수 있어요." }, { status: 403 });
   }
 

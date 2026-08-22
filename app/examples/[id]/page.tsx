@@ -32,14 +32,20 @@ export default function ExamplePage() {
   const [data, setData] = useState<GatedExample | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [childId, setChildId] = useState<string | null>(null);
+  // "Premium 구독하기" 버튼이 왜 못 나가는지 구분해서 보여주기 위한 상태(2026-08-22 버그
+  // 수정 — 예전엔 childId 없으면 이유 설명 없이 무조건 /mypage로 조용히 보냈음).
+  const [hasToken, setHasToken] = useState(false);
+  const [role, setRole] = useState<string | null>(null);
 
   useEffect(() => {
     const token = typeof window !== "undefined" ? localStorage.getItem("ms_access_token") : null;
     if (!token) return;
+    setHasToken(true);
     fetch("/api/identity/me", { headers: { Authorization: `Bearer ${token}` } })
       .then((res) => (res.ok ? res.json() : null))
       .then((me) => {
         if (me?.childId) setChildId(me.childId);
+        if (me?.role) setRole(me.role);
       })
       .catch(() => {});
   }, []);
@@ -99,12 +105,26 @@ export default function ExamplePage() {
             이 모듈은 Premium 콘텐츠예요. 구독하시면 전체 코드, 코드 설명, AI 튜터까지 모두
             이용하실 수 있어요.
           </p>
-          <Link
-            href={childId ? `/checkout?childId=${childId}&plan=premium` : "/mypage"}
-            className="btn btnCoral fullBtn"
-          >
-            Premium 구독하기
-          </Link>
+          {childId ? (
+            <Link href={`/checkout?childId=${childId}&plan=premium`} className="btn btnCoral fullBtn">
+              Premium 구독하기
+            </Link>
+          ) : !hasToken ? (
+            <Link href="/login" className="btn btnCoral fullBtn">
+              로그인하고 구독하기
+            </Link>
+          ) : role === "guardian" ? (
+            <>
+              <p className="muted" style={{ marginBottom: 8 }}>
+                연결된 자녀가 없어요. 마이페이지에서 자녀를 먼저 연결해주세요.
+              </p>
+              <Link href="/mypage/billing" className="btn btnOutline">마이페이지로</Link>
+            </>
+          ) : role === "admin" ? (
+            <p className="muted">관리자 계정은 구독을 만들 수 없어요.</p>
+          ) : (
+            <p className="muted">구독은 보호자 계정에서만 가능해요.</p>
+          )}
         </div>
       ) : (
         <>
