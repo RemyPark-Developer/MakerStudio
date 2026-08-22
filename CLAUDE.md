@@ -54,6 +54,8 @@ Claude Code가 이 저장소에서 작업할 때 항상 먼저 읽어야 하는 
 - `lib/api-error-handler.ts` (`withErrorHandling`) — **모든 API 라우트는 이걸로 감싸야 함.** 안 감싸면 예상 못 한 예외가 HTML 에러 페이지로 나가서 클라이언트에 "서버에 연결할 수 없어요" 같은 오해를 주는 메시지가 뜬다(2026-08-13 실사용자 테스트 중 발견). **새 라우트를 만들 때 이 패턴을 반드시 따를 것.**
 - **해지 후 30일 데이터 보관 정책 — 준비 단계만(2026-08-22, `0036`)** — `subscriptions`/`family_groups.data_retention_until`(해지 시 `current_period_end`+30일로 계산, `canceled_at` 아님 — §4.3 원칙과 일관), `scripts/purge-expired-data.ts`(관리자 수동 실행, 기본 dry-run, `--confirm`으로 실제 삭제, `hasPremiumAccess()`로 다른 경로 접근권 재확인하는 안전장치 포함). **실제 자동 파기(cron)는 연결 안 됨 — 지금은 아무것도 자동으로 안 지워짐.** ⚠️ **이 정책의 법적 고지 문구(`docs/MakerStudio_Privacy_Policy_DRAFT_addendum_v0.1.md`, 가입 동의 화면·해지 확인 문구)는 전부 초안이며 실제 법률 검토가 안 됐음 — 확정된 정책으로 취급하지 말 것.** "학습 데이터" 범위는 `lib/billing/dataRetention.ts`의 `LEARNING_DATA_TABLES`(6개 테이블, Family 환불 정책의 "이용 내역" 정의 재사용)가 유일한 소스.
 - **Premium VIP 요금제(월 ₩100,000, 2026-08-22, `0035`)** — `subscriptions.plan`에 `premium_vip` 추가, `vip_mentor_requests` 테이블. "AI 초안 + admin 승인 후 발송" 구조 — `app/api/learning/vip/admin/[id]/approve-and-send`를 거치지 않고는 `final_feedback`이 절대 채워지지 않는다(AI 단독 응답 절대 금지, 표시광고법 허위광고 리스크 + 정직성 원칙). `app/api/learning/vip/submit`(학생 제출, 월 4회 한도, `lib/learning/tutorSafety.ts` 안전필터 재사용), `app/admin/vip-review`(관리자 검수, `content-review`와 동일 패턴), `app/mypage/vip`(학생 본인 + guardian 열람), `app/mypage/billing`에 자녀별 VIP 카드. **`lib/content/gate.ts`의 `hasPremiumAccess()`가 `premium_vip`도 인정하도록 확장됨** — VIP 구독자는 일반 Premium 콘텐츠도 함께 이용 가능(새 게이팅 로직 짤 때 이 포함 관계 기억할 것). `hasVipAccess()`는 Family 경유 없음(개인 구독 전용).
+- **소셜 로그인 — 구글(2026-08-22)** — `lib/supabase/browser.ts`(브라우저 전용 anon-key 클라이언트, `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY` 신규 사용), `app/SocialLoginButtons.tsx`, `app/auth/callback/page.tsx`. `POST /api/identity/signup/social` 같은 커스텀 서버 엔드포인트는 안 만듦 — 브라우저가 `supabase.auth.signInWithOAuth()`로 Supabase와 직접 통신하고, 콜백 페이지가 그 세션의 토큰을 기존 `ms_access_token`/`ms_refresh_token`(localStorage) 체계로 그대로 옮겨서 `authedFetch` 등 기존 인프라를 그대로 재사용한다. 온보딩(신규 사용자 닉네임 입력)도 새 서버 로직 없이 기존 `GET/PATCH /api/identity/me`(`needsNickname` 판단)를 그대로 재사용. role은 무조건 `student_teen`(§3.3, 소셜 로그인은 만 14세 이상으로 간주). **카카오는 아직 버튼이 없음** — Supabase는 카카오에 토큰 방식(`signInWithIdToken`)을 지원하지 않아 구글과 동일한 리다이렉트 방식으로 통일해야 하는데, 대표님이 Supabase 대시보드에 Kakao 프로바이더(Client ID/Secret)를 등록해야 버튼을 추가할 수 있다(코드 구조는 이미 준비됨, `SocialLoginButtons`에 한 줄만 추가). 상세: `docs/MakerStudio_Auth_Flow_v1.0.md` §2.1/2.2.
+- **이메일 가입 버그 수정(2026-08-22)** — `app/signup/page.tsx`의 `TeenSignupForm`(중고등/성인 이메일 가입)이 아동 SMS 인증 전용 엔드포인트(`/api/identity/signup/child/verify`)를 잘못 호출하고 있어서 이메일 가입이 항상 실패하던 버그를 위 소셜 로그인 작업 중 발견해 같이 고침 — 올바른 엔드포인트(`/api/identity/signup`)로 정정. 실DB로 재검증 완료.
 
 ## 아직 결정 안 된 것
 
@@ -61,7 +63,7 @@ Claude Code가 이 저장소에서 작업할 때 항상 먼저 읽어야 하는 
 
 ## 아직 안 된 것
 
-- 소셜 로그인(카카오·구글) OAuth 콜백 자체 연동 — Supabase 프로젝트에서 OAuth 프로바이더 설정 필요
+- 소셜 로그인 — 카카오 — 구글은 2026-08-22 완료. 카카오는 대표님이 Supabase 대시보드에 프로바이더(Client ID/Secret)를 등록해야 진행 가능(코드는 버튼 추가만 하면 되는 상태)
 - Solapi 프로덕션 키 설정 — 로직·검증은 끝났고 키만 넣으면 됨(서비스 오픈 준비 시점, `.env.local`)
 - ~~회사 귀책(중복결제·시스템오류) 전액환불 자동 판별~~ — 2026-08-21 완료(`payments.refund_reason`, `0031`). `refund_reason`을 세팅하는 admin API/화면은 여전히 없음(SQL Editor로 수동) — 필요해지면 별도 작업.
 - Family→Premium/Free 요금제 티어 전환, 구독/Family 만료 임박 알림(cron 인프라 필요), 콘텐츠 검수 승인/반려 알림(비-admin 제출 플로우 필요) — 전부 의도적으로 보류된 항목, 대표님이 먼저 꺼낼 때 시작. 각각의 판단 근거는 `~/.claude/projects/-workspaces-MakerStudio/memory/`의 project 메모리 참고.

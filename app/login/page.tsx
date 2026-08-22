@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { SocialLoginButtons } from "@/app/SocialLoginButtons";
 
 export default function LoginPage() {
   return (
@@ -68,7 +69,9 @@ function LoginPageInner() {
           </p>
         )}
 
-        {/* TODO: 소셜 로그인(카카오·구글)은 OAuth 프로바이더 등록 후 추가 — Dev_Sequence.md 2단계 잔여 항목 */}
+        <SocialLoginButtons />
+        {/* TODO: 카카오는 대표님이 Supabase 대시보드에 Kakao 프로바이더를 등록하면
+            SocialLoginButtons에 버튼만 추가 — Dev_Sequence.md 2단계 잔여 항목 */}
 
         <form className="authForm" onSubmit={handleSubmit}>
           <label htmlFor="email">이메일</label>

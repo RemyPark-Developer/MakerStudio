@@ -1,10 +1,11 @@
 # 2026-08-22 세션 요약 — 설계 판단과 구현 범위
 
-**버전**: v1.2 · **최종 수정**: 2026-08-22 · **짝 파일**: `MakerStudio_DB_Schema_v1.0.md`, `MakerStudio_Session_2026-08-21_Summary_v1.11.md`
+**버전**: v1.3 · **최종 수정**: 2026-08-22 · **짝 파일**: `MakerStudio_DB_Schema_v1.0.md`, `MakerStudio_Session_2026-08-21_Summary_v1.11.md`
 
 ### 개정 이력
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| v1.3 | 2026-08-22 | 소셜 로그인(구글) + 이메일 가입 버그 수정 이어붙임 — `signInWithOAuth` 리다이렉트 + `/auth/callback` 브리징 구조, 실DB 실증 검증까지 완료 |
 | v1.2 | 2026-08-22 | 해지 후 30일 데이터 보관 정책(준비 단계) 이어붙임 — 스키마+수동 파기 스크립트+법적 고지 문구 초안. PDF 포트폴리오는 별도 작업으로 분리 |
 | v1.1 | 2026-08-22 | Premium VIP 요금제(월 ₩100,000, AI초안+admin승인 비동기 멘토링) 이어붙임 — 5단계로 나눠 진행, 실증 검증까지 완료 |
 | v1.0 | 2026-08-22 | 최초 작성 — 가격 정책 페이지(`/pricing`) 신설 |
@@ -19,6 +20,7 @@
 | 1 | 가격 정책 페이지 (`/pricing`) | `6c8864d` | `0034` |
 | 2 | Premium VIP 요금제 (AI초안+admin승인 비동기 멘토링) | `d20ec37` | `0035` |
 | 3 | 해지 후 30일 데이터 보관 정책 (준비 단계) | `e69aca8` | `0036` |
+| 4 | 소셜 로그인(구글) + 이메일 가입 버그 수정 | (미커밋) | 없음 |
 
 ---
 
@@ -313,6 +315,121 @@ admin 1)으로 총 22개 체크 전부 통과:
 - 개인정보처리방침 전체 문서화 — 이 조항 하나만 초안으로 준비, 전체 정책은 별도 작업.
 
 (상세: [[project-data-retention-policy]])
+
+---
+
+## 4. 소셜 로그인(구글) + 이메일 가입 버그 수정
+
+**커밋**: (미커밋) · **마이그레이션**: 없음(스키마 변경 불필요)
+
+### 배경
+
+MVP 스코프 문서(`MVP_Scope_v1.2.md`)에 Should로 명시된 화면 중 소셜 로그인만 유일하게
+안 끝나 있었다(`Auth_Flow.md` §2.1/2.2엔 흐름이 이미 설계돼 있었지만, 실제 코드는
+`app/login`/`app/signup`의 TODO 주석뿐). 대표님이 카카오·구글 중 **구글만 먼저** 진행하기로
+결정.
+
+### 조사 중 발견한 인접 버그
+
+`app/signup/page.tsx`의 `TeenSignupForm`(이메일/비밀번호 중고등 가입)이 아동 SMS 인증
+전용 엔드포인트(`/api/identity/signup/child/verify`, `{verifyToken, smsCode}` 필요)를
+잘못 호출하고 있어서, 이메일 가입이 지금까지 항상 실패하고 있었다. 올바른 엔드포인트
+(`/api/identity/signup`)는 이미 존재하고 정상 동작하며 응답 메시지도 원래 그 엔드포인트의
+실제 동작과 정확히 일치해서 — 원래 그 엔드포인트를 쓰려다 옆 코드를 잘못 붙여넣은 것으로
+보인다. 대표님께 같이 고칠지 여쭤봤고 "같이 고침"으로 확정.
+
+### 핵심 설계 판단
+
+- **메커니즘: Supabase 네이티브 OAuth 리다이렉트**(`supabase.auth.signInWithOAuth`) —
+  `API_Spec_v1.0.md`에 원래 적혀 있던 `POST /api/identity/signup/social {provider,
+  oauthToken}` 방식(브라우저가 토큰을 받아 우리 서버로 보내는 방식)은 구글 ID 토큰
+  (`signInWithIdToken`)엔 맞지만, **Supabase가 카카오는 이 방식을 지원하지 않아** 두
+  프로바이더에 동일하게 못 쓴다. 리다이렉트 방식은 카카오·구글 둘 다 같은 코드로 되므로
+  이 방식으로 통일하고, 문서(API_Spec)를 실제 구현대로 정정함.
+- **세션 브리징**: 이 프로젝트는 Supabase JS 세션을 그대로 쓰지 않고 자체
+  `ms_access_token`/`ms_refresh_token`(localStorage, `lib/client-auth.ts`)로 인증을
+  관리한다. `/auth/callback` 페이지가 OAuth 리다이렉트 후 받은 Supabase 세션에서
+  `access_token`/`refresh_token`을 그대로 꺼내 같은 localStorage 키에 저장 — 덕분에
+  `authedFetch`를 비롯한 기존 인증 인프라를 전혀 안 건드리고 그대로 재사용했다.
+- **온보딩도 새 서버 로직 없이 재사용**: `GET/PATCH /api/identity/me`가 이미
+  `needsNickname` 판단과 닉네임+role 저장을 전부 지원하고 있어서(`Auth_Flow.md` §2.1
+  7~10단계와 정확히 일치), 콜백 페이지는 이 기존 엔드포인트만 호출한다. 다만 기존 코드
+  어디에도 `needsNickname:true`일 때 보여줄 실제 화면(닉네임 입력 폼)이 없었다는 것도
+  이번에 확인해서, `/auth/callback` 안에 인라인으로 새로 만들었다(새 라우트는 추가 안 함).
+- **브라우저 전용 Supabase 클라이언트 신설**(`lib/supabase/browser.ts`) — 지금까지
+  이 저장소엔 서버 전용 클라이언트(`lib/supabase/server.ts`)만 있었다. `NEXT_PUBLIC_
+  SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY`를 새로 추가(기존 서버용 값과 동일,
+  접두사만 다름 — anon key라 노출돼도 안전). **CLAUDE.md의 서버 싱글턴 세션오염 절대
+  규칙과는 무관** — 그건 서버의 service_role 싱글턴에서 세션을 바꾸는 메서드를 호출하면
+  안 된다는 얘기고, 이건 브라우저에서 anon key로 쓰는 별개의 클라이언트라 세션을 갖는 게
+  원래 용도다.
+- **role**: `Auth_Flow.md` §3.3 그대로 — 소셜 로그인은 무조건 `student_teen`으로 확정.
+  기존 이메일 계정과의 자동 연결(같은 이메일)은 Supabase의 기본 동작에 맡기고 별도 로직을
+  만들지 않음 — 이번 범위 밖.
+
+### 코드 변경
+
+- `lib/supabase/browser.ts`(신규) — 브라우저 전용 anon-key 클라이언트.
+- `app/SocialLoginButtons.tsx`(신규) — "Google로 시작하기" 버튼, provider를 받는 형태라
+  카카오는 대표님이 Supabase 대시보드에 프로바이더를 등록하면 버튼 한 줄만 추가하면 됨.
+- `app/auth/callback/page.tsx`(신규) — 세션→localStorage 브리징, `needsNickname` 분기,
+  인라인 온보딩 폼.
+- `app/login/page.tsx`, `app/signup/page.tsx` — TODO 주석 자리에 `SocialLoginButtons`
+  연결.
+- `app/signup/page.tsx`의 `TeenSignupForm` — `/api/identity/signup/child/verify` →
+  `/api/identity/signup`로 정정.
+
+### 문서 동기화
+
+- `Auth_Flow_v1.0.md` §2.1/2.2 — 실제 구현(리다이렉트 + 콜백 브리징)으로 재작성, v1.2로
+  버전업.
+- `API_Spec_v1.0.md` — 실제로 만들지 않은 `POST /api/identity/signup/social`,
+  `POST /api/identity/login/social` 행을 제거하고 실제 구조로 정정. 빠져 있던
+  `POST /api/identity/signup`(중고등 이메일 가입) 행도 이번에 채움.
+- `Dev_Sequence_v1.0.md` §2단계 — 구글 완료, 카카오 대기 상태 반영.
+- `MVP_Scope_v1.2.md` — v1.13, 화면 목록의 "로그인 (소셜)" 행에 구글 완료 반영.
+- `.env.local.example`/`.env.local` — `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY`
+  추가(기존 서버용 값과 동일).
+- `CLAUDE.md` — "지금까지 실제로 구현된 것"에 소셜 로그인(구글)·이메일 가입 버그 수정 항목
+  추가, "아직 안 된 것"에서 구글 제거하고 카카오만 남김.
+
+### 검증 방법 — Playwright로 실DB·실제 화면까지 전 구간 실증 완료
+
+실제 구글 계정으로 로그인 버튼을 누르는 과정 자체는 자동화할 수 없어서(브라우저 상호작용
+필요), `/auth/callback`부터는 이 세션 내내 써온 패턴대로 실제 Supabase 세션을 만들어
+(`admin.auth.admin.generateLink` + 임시 클라이언트의 `verifyOtp()`) 검증했다.
+
+- **신규 사용자**: 실제 세션을 브라우저에 주입(Supabase JS가 실제로 쓰는 localStorage
+  키/포맷 그대로 — `sb-<project-ref>-auth-token`에 세션 객체를 직접 저장, 처음엔
+  `{currentSession, expiresAt}`로 잘못 감싸서 세션 인식 실패 → 실제 `auth-js` 소스
+  (`_saveSession`)를 확인해 세션 객체를 그대로 저장하는 형식으로 수정) → `/auth/callback`
+  로드 → 온보딩(닉네임 입력) 화면이 뜸 → 제출 → `/mypage`로 이동 → 실DB에서
+  `profiles.role='student_teen'`, `nickname`이 정확히 저장됐는지 확인.
+- **기존 사용자**: 같은 방식으로 세션 주입 → 온보딩 없이 바로 `/mypage`로 이동 →
+  `ms_access_token`/`ms_refresh_token`이 세션 토큰과 정확히 일치하게 저장됐는지 확인.
+- **TeenSignupForm 버그 수정**: 실제 `/signup` 화면에서 이메일 가입 시도 →
+  `/api/identity/signup`이 호출되는지(기존처럼 `child/verify`가 아님) 네트워크 요청으로
+  확인 → 실DB에 `role='student_teen'`으로 계정이 생성되고 닉네임도 정확히 저장됨을 확인.
+  이메일 발송 자체는 502로 실패했는데, 이건 버그가 아니라 dev 환경의 Resend 샌드박스
+  발신자(`onboarding@resend.dev`)가 계정 소유자 본인 이메일 외로는 발송을 거부하는 정상
+  동작(`lib/email/resend.ts`의 "설정 안 되어 있으면 명확히 실패" 원칙과 일관) — 실제
+  프로덕션 Resend 도메인이 붙으면 문제 없음.
+- 검증 중 세션 주입 형식을 잘못 알아서 두 번 실패한 게 전부고, 실제 애플리케이션 코드에서
+  발견된 문제는 없었다. 테스트 계정은 전부 정리해서 baseline(9개 계정)으로 복귀 확인.
+- `tsc --noEmit`, `npm test`(53개) 회귀 확인 — 이번 작업으로 깨진 것 없음(`gate.test.ts`의
+  기존 타입 에러 1건은 이 작업과 무관한 사전 존재 이슈, clean tree에서도 재현 확인함).
+
+### 대표님이 별도로 해주셔야 하는 것
+
+실제 "Google로 시작하기" 버튼이 동작하려면:
+1. Google Cloud Console에서 OAuth 동의 화면 + OAuth 2.0 클라이언트 ID 생성
+2. 리다이렉트 URI로 Supabase 프로젝트 콜백 URL(`https://cfedoyznrvcbbwwfcwjw.supabase.co/auth/v1/callback`) 등록
+3. Supabase 대시보드 → Authentication → Providers → Google에 발급받은 Client ID/Secret 입력
+4. (완료) `.env.local`에 `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY` — 이번에
+   기존 서버용 값과 동일하게 미리 채워둠
+
+카카오는 위 2·3번을 카카오 디벨로퍼스 기준으로 반복하면 됨(1번은 카카오 계정으로 별도 앱
+등록) — 그 이후 코드 쪽엔 `SocialLoginButtons`에 버튼 한 줄만 추가하면 된다.
 
 ---
 

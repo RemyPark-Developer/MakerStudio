@@ -1,6 +1,6 @@
 # MakerStudio 인증/인가 상세 플로우 (MVP 범위)
 
-**버전**: v1.1 · **작성일**: 2026-08-13 · **최종 수정**: 2026-08-21(§3 RLS 실제 구현 반영)
+**버전**: v1.2 · **작성일**: 2026-08-13 · **최종 수정**: 2026-08-22(§2.1/2.2 소셜 로그인 실제 구현 반영 — 구글, `signInWithOAuth` 리다이렉트 방식)
 **짝 파일**: `MakerStudio_API_Spec_v1.0.md` · `MakerStudio_DB_Schema_v1.0.md`
 
 ## 0. 이 문서의 목적
@@ -26,24 +26,37 @@ API 명세서의 `identity` 엔드포인트들이 **정확히 어떤 순서로, 
 
 ### 2.1 소셜 로그인 — 최초 가입 (닉네임 온보딩 포함)
 
-1. 클라이언트: "카카오로 시작하기" 클릭
-2. 클라이언트 → 카카오 OAuth 동의 화면으로 리다이렉트
-3. 사용자가 카카오에서 동의 → 카카오가 인가 코드(authorization code)와 함께 콜백 URL로 리다이렉트
-4. 클라이언트(콜백 페이지) → Supabase Auth SDK가 인가 코드를 Supabase에 전달
-5. Supabase Auth가 카카오와 토큰 교환 → `auth.users`에 신규 행 생성, JWT 발급
-6. 서버: `auth.users.id`로 `public.profiles`를 조회 → **없으면 신규 사용자로 판단**
-7. 서버 → 클라이언트: `{needsNickname: true}` 응답
-8. 클라이언트: 닉네임 온보딩 화면 표시 (프로토타입 §랜딩→가입 "무료로 시작하기" 흐름과 동일)
-9. 클라이언트 → 서버: `PATCH /api/identity/me {nickname, role: 'student_teen'}`
-10. 서버: `profiles` 행 생성, `role`을 `student_teen`으로 확정(§3.3 — 소셜 로그인은 만 14세 이상으로 간주)
-11. 클라이언트 → 학습 화면으로 이동
+**실제 구현(2026-08-22, 구글 우선)**: 브라우저가 우리 서버를 거치지 않고 Supabase와 직접
+통신한다 — 커스텀 `POST /api/identity/signup/social` 엔드포인트는 만들지 않았다(카카오는
+Supabase가 토큰 방식을 지원하지 않아 리다이렉트 방식으로 카카오·구글을 통일해야 했음,
+`API_Spec_v1.0.md` §2 참고).
+
+1. 클라이언트: "Google로 시작하기" 클릭 (`app/SocialLoginButtons.tsx`)
+2. 브라우저 → `lib/supabase/browser.ts`의 `supabase.auth.signInWithOAuth({provider:'google',
+   options:{redirectTo:'/auth/callback'}})` 호출 → 구글 OAuth 동의 화면으로 리다이렉트
+3. 사용자가 구글에서 동의 → 구글이 인가 코드와 함께 `/auth/callback`(우리 앱)으로 리다이렉트
+4. `/auth/callback`(`app/auth/callback/page.tsx`) 마운트 → Supabase JS SDK가 URL의 인가
+   코드를 자동으로 Supabase와 교환(PKCE) → `auth.users`에 신규 행 생성, 세션 발급
+5. 콜백 페이지: 그 세션의 `access_token`/`refresh_token`을 우리 자체 인증 체계
+   (`ms_access_token`/`ms_refresh_token`, `lib/client-auth.ts`가 읽는 localStorage 키)로
+   그대로 옮겨 저장 — 이후 화면은 전부 기존 `authedFetch` 그대로 재사용
+6. 콜백 페이지 → `GET /api/identity/me` 호출 → 서버가 `profiles.nickname` 존재 여부로 신규
+   여부 판단(`needsNickname`)
+7. `needsNickname: true` → 콜백 페이지가 인라인 닉네임 입력 폼을 보여줌
+8. 사용자가 닉네임 입력 후 제출 → 콜백 페이지 → `PATCH /api/identity/me {nickname, role:
+   'student_teen'}`
+9. 서버: `profiles` 갱신, `role`을 `student_teen`으로 확정(§3.3 — 소셜 로그인은 만 14세
+   이상으로 간주, 신규 사용자일 때만 role 반영 — 기존 사용자의 role은 이 경로로 못 바꿈)
+10. 클라이언트 → `/mypage`로 이동
+
+**범위**: 카카오는 대표님이 Supabase 대시보드에 Kakao 프로바이더(Client ID/Secret)를
+등록하면 `SocialLoginButtons`에 버튼 한 줄만 추가하면 됨 — 코드 구조는 이미 provider를
+받는 형태로 준비돼 있음.
 
 ### 2.2 소셜 로그인 — 재방문 (기존 사용자)
 
-1~5. 위와 동일
-6. 서버: `profiles` 조회 → **이미 존재하면** 온보딩 생략
-7. 서버 → 클라이언트: `{needsNickname: false}` + 기존 프로필 정보
-8. 클라이언트: 학습 화면 또는 마지막 위치로 이동
+1~6. 위와 동일
+7. `needsNickname: false` → 콜백 페이지가 온보딩 없이 바로 `/mypage`로 이동
 
 ### 2.3 초등학생 개인가입 (보호자 SMS 인증) — §3.2 핵심 흐름
 

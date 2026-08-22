@@ -25,11 +25,11 @@
 
 | Method | Path | 인증 | 설명 |
 |---|---|---|---|
-| POST | `/api/identity/signup/social` | ✕ | 소셜 OAuth 콜백 처리. `{provider, oauthToken}` → 신규면 계정 생성 후 `{needsNickname: true}` 반환 (온보딩 화면 분기용, 프로토타입 §랜딩→가입 참고) |
+| POST | `/api/identity/signup` | ✕ | 중고등/성인 이메일 가입. `{email, password, nickname}` → `role: 'student_teen'` 계정 생성, 확인 메일 발송(`needsEmailVerification: true`) |
 | POST | `/api/identity/signup/child` | ✕ | 초등학생 개인가입 1단계. `{nickname, guardianPhone}` → 인증 SMS 발송, `verifyToken` 반환 |
 | POST | `/api/identity/signup/child/verify` | ✕ | 2단계. `{verifyToken, smsCode, agreeChildPrivacy: true}` → 계정 생성. `agreeChildPrivacy`가 `false`면 `403`(§3.2 준수, 서버가 반드시 재검증 — 클라이언트 체크박스만 믿지 않음) |
 | POST | `/api/identity/login` | ✕ | `{email, password}` → JWT 발급 |
-| POST | `/api/identity/login/social` | ✕ | `{provider, oauthToken}` → JWT 발급 |
+| (없음 — 브라우저가 직접 처리) | 소셜 로그인/가입 (Google, 2026-08-22 구현) | — | ~~`POST /api/identity/signup/social`~~는 실제로 만들지 않음 — 브라우저가 `supabase.auth.signInWithOAuth()`로 직접 Google과 통신하고(`lib/supabase/browser.ts`), `/auth/callback` 페이지가 그 결과 세션을 `GET/PATCH /api/identity/me`(바로 아래)로 브리징한다. 카카오는 Supabase가 토큰 방식(`signInWithIdToken`)을 지원하지 않아 리다이렉트 방식으로 통일 — 대표님이 Supabase 대시보드에 Kakao 프로바이더를 등록하면 같은 구조 그대로 확장 가능. `Auth_Flow.md` §2.1/2.2 참고 |
 | POST | `/api/identity/password/forgot` | ✕ | `{email}` → 재설정 메일 발송 (항상 200 반환 — 가입 여부를 노출하지 않기 위함) |
 | POST | `/api/identity/password/reset` | ✕ | `{resetToken, newPassword}` → 변경 완료 |
 | GET | `/api/identity/me` | ✓ | 내 프로필 조회 |

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { SocialLoginButtons } from "@/app/SocialLoginButtons";
 
 type Branch = "teen" | "child";
 
@@ -69,13 +70,9 @@ function TeenSignupForm({ onDone }: { onDone: () => void }) {
     setError(null);
     setLoading(true);
     try {
-      const token = typeof window !== "undefined" ? localStorage.getItem("ms_access_token") : null;
-      const res = await fetch("/api/identity/signup/child/verify", {
+      const res = await fetch("/api/identity/signup", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password, nickname }),
       });
       const data = await res.json();
@@ -92,20 +89,24 @@ function TeenSignupForm({ onDone }: { onDone: () => void }) {
   }
 
   return (
-    <form className="authForm" onSubmit={handleSubmit}>
-      {/* TODO: 소셜 가입(카카오·구글)은 OAuth 연동 후 여기에 추가 */}
-      <label htmlFor="nickname">닉네임</label>
-      <input id="nickname" required maxLength={10} value={nickname} onChange={(e) => setNickname(e.target.value)} />
-      <label htmlFor="email">이메일</label>
-      <input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-      <label htmlFor="password">비밀번호</label>
-      <input id="password" type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} />
-      {error && <p className="formError">{error}</p>}
-      <button type="submit" disabled={loading} className="btn btnCoral fullBtn">
-        {loading ? "가입 중..." : "가입하기"}
-      </button>
-      <p className="formNote">만 14세 이상으로 간주하고 별도 보호자 동의 절차 없이 바로 이용 시작해요.</p>
-    </form>
+    <>
+      <SocialLoginButtons />
+      {/* TODO: 카카오는 대표님이 Supabase 대시보드에 Kakao 프로바이더를 등록하면
+          SocialLoginButtons에 버튼만 추가 */}
+      <form className="authForm" onSubmit={handleSubmit}>
+        <label htmlFor="nickname">닉네임</label>
+        <input id="nickname" required maxLength={10} value={nickname} onChange={(e) => setNickname(e.target.value)} />
+        <label htmlFor="email">이메일</label>
+        <input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+        <label htmlFor="password">비밀번호</label>
+        <input id="password" type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} />
+        {error && <p className="formError">{error}</p>}
+        <button type="submit" disabled={loading} className="btn btnCoral fullBtn">
+          {loading ? "가입 중..." : "가입하기"}
+        </button>
+        <p className="formNote">만 14세 이상으로 간주하고 별도 보호자 동의 절차 없이 바로 이용 시작해요.</p>
+      </form>
+    </>
   );
 }
 
